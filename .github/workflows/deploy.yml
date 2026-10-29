@@ -1,0 +1,55 @@
+name: 部署網站
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 檢查並建置
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 安裝套件
+        run: npm install --no-audit --no-fund
+      - name: 型別檢查
+        run: npm run typecheck
+      - name: 單元測試（同步、日期、網址）
+        run: npm test
+      - name: 建置
+        run: npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: 發佈到 GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  database:
+    name: 資料庫權限測試
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 在暫時的 PostgreSQL 跑 schema.sql 與權限測試
+        run: PGBIN="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" bash tests/sql/run.sh

@@ -22,14 +22,15 @@ export function createBackend(): Backend {
   });
   const redirectTo = `${location.origin}${location.pathname}`;
 
-  async function check<T>(p: PromiseLike<{ data: T; error: { message?: string; code?: string } | null }>): Promise<T> {
-    let res: { data: T; error: { message?: string; code?: string } | null };
+  /** 執行查詢；失敗時丟出分類好的錯誤 */
+  async function check(p: PromiseLike<{ data: unknown; error: unknown }>): Promise<unknown> {
+    let res: { data: unknown; error: unknown };
     try {
       res = await p;
     } catch (e) {
       throw classifyError({ message: String((e as Error)?.message ?? e) });
     }
-    if (res.error) throw classifyError(res.error);
+    if (res.error) throw classifyError(res.error as { message?: string; code?: string });
     return res.data;
   }
 
@@ -73,7 +74,7 @@ export function createBackend(): Backend {
 
   const remote: Remote = {
     async insert(table, row) {
-      return check(client.from(table).insert(row).select().single()) as Promise<AnyRow>;
+      return (await check(client.from(table).insert(row).select().single())) as AnyRow;
     },
     async update(table, id, patch, baseRev) {
       const rows = await check(client.from(table).update(patch).eq('id', id).eq('rev', baseRev).select());
