@@ -474,3 +474,4 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .li.image .li-main { align-self: stretch; padding: 10px 0; gap: 12px; }
 .li.image .li-thumb { width: auto; height: 146px; max-width: 62%; aspect-ratio: auto; object-fit: contain; background: #fff8df; font-size: 32px; min-width: 120px; }
 .li.image .li-thumb.empty { width: 146px; }
+.act-time.blank { visibility: hidden; }

@@ -37,6 +37,8 @@ export interface TripSettings {
   maps?: { id: string; label: string; path: string }[];
   /** 已把舊的「移動」行程轉成路線 */
   moves_converted?: boolean;
+  /** 已經匯入過的行程檔代號 */
+  imports?: string[];
 }
 
 export interface Traveler extends TripContent {
@@ -80,6 +82,8 @@ export interface Activity extends TripContent {
   links: NamedLink[];
   /** 補充圖片 */
   images: { id: string; path: string }[];
+  /** 沒填時間時，排在哪個行程後面（null＝當天最後） */
+  after_activity_id: string | null;
 }
 
 export interface NamedLink {
@@ -204,8 +208,17 @@ export interface RouteLeg extends TripContent {
   custom: boolean;
   /** 按了「不需要」 */
   dismissed: boolean;
+  /** 主要方案的步驟（＝plans[0].steps） */
   steps: LegStep[];
+  /** 所有方案（空的話只有 steps 一個方案） */
+  plans: LegPlan[];
   notes: string;
+}
+
+export interface LegPlan {
+  id: string;
+  label: string;
+  steps: LegStep[];
 }
 
 export interface PersonalStatus extends TripContent {

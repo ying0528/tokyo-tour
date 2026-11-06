@@ -249,6 +249,8 @@ alter table public.activities add column if not exists map_url text not null def
 alter table public.activities add column if not exists links jsonb not null default '[]'::jsonb;
 -- 第四版：行程的補充圖片（[{"id":"…","path":"旅行id/檔名"}]）
 alter table public.activities add column if not exists images jsonb not null default '[]'::jsonb;
+-- 第四版：沒填時間的行程排在哪個行程後面
+alter table public.activities add column if not exists after_activity_id uuid;
 
 -- ---------- 個人狀態（可選的「已完成」）----------
 create table if not exists public.personal_status (
@@ -342,6 +344,8 @@ create table if not exists public.route_legs (
   rev bigint not null default 0
 );
 create index if not exists route_legs_sync_idx on public.route_legs(trip_id, updated_at);
+-- 一段路線可以有好幾個方案：[{"id":"…","label":"京急到品川","steps":[…]}]，第一個是主要方案（steps 存主要方案）
+alter table public.route_legs add column if not exists plans jsonb not null default '[]'::jsonb;
 
 -- ---------- 索引（同步時依旅行與更新時間查詢）----------
 create index if not exists trips_updated_idx on public.trips(updated_at);

@@ -129,9 +129,9 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
     }>
       <div className="pad stack">
         <div className="detail-hero" style={{ background: kind.bg }}>
-          <span className="badge">{kind.label}</span>
+          {kind.short ? <span className="badge">{kind.label}</span> : null}
           <h1 className="detail-title">{name}</h1>
-          {a.start_time ? <span className="num" style={{ fontSize: 22 }}>{hhmm(a.start_time)}</span> : <span className="muted">時間未定</span>}
+          {a.start_time ? <span className="num" style={{ fontSize: 22 }}>{hhmm(a.start_time)}</span> : null}
         </div>
 
         {a.notes.trim() ? (

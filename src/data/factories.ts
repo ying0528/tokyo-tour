@@ -42,7 +42,7 @@ export function newActivity(tripId: string, fields: Partial<Activity> & Pick<Act
   return {
     ...base(), trip_id: tripId, start_time: null, duration_min: null, kind: 'sight', place_id: null,
     title: '', from_name: '', to_name: '', cost: null, currency: '', notes: '',
-    audience_groups: [], audience_travelers: [], map_url: '', links: [], images: [], ...fields,
+    audience_groups: [], audience_travelers: [], map_url: '', links: [], images: [], after_activity_id: null, ...fields,
   };
 }
 
@@ -83,6 +83,6 @@ export function newListCheck(tripId: string, listId: string, userId: string, id:
 export function newLeg(tripId: string, fields: Partial<RouteLeg> & Pick<RouteLeg, 'date'>): RouteLeg {
   return {
     ...base(), trip_id: tripId, group_key: '', from_activity_id: null, to_activity_id: null, from_name: '', to_name: '',
-    start_time: null, custom: false, dismissed: false, steps: [], notes: '', ...fields,
+    start_time: null, custom: false, dismissed: false, steps: [], plans: [], notes: '', ...fields,
   };
 }

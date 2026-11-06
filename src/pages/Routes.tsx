@@ -7,11 +7,11 @@ import { goBack, navigate } from '../app/router.ts';
 import { canEditGroup, dayView, setViewGroup, tripCtx, useViewVersion } from '../app/tripContext.ts';
 import type { TripCtx } from '../app/tripContext.ts';
 import {
-  addCustomLeg, convertMoves, dayPlanOf, dismissLeg, ensureLeg, legacyMoves, removeLeg, restoreLeg, saveLegSteps,
+  addCustomLeg, convertMoves, dayPlanOf, dismissLeg, ensureLeg, legacyMoves, removeLeg, restoreLeg, saveLegPlans,
 } from '../data/actions.ts';
-import type { LegMode, LegStep, RouteLeg, Trip } from '../data/types.ts';
+import type { LegMode, LegPlan, LegStep, RouteLeg, Trip } from '../data/types.ts';
 import { tripDays } from '../lib/dates.ts';
-import { dayLegs, directionsUrl, searchUrl, stepSummary } from '../lib/legs.ts';
+import { dayLegs, directionsUrl, legPlans, planLabel, searchUrl, stepSummary } from '../lib/legs.ts';
 import type { LegView } from '../lib/legs.ts';
 import { activityName, groupName, hhmm } from '../lib/plan.ts';
 import {
@@ -94,7 +94,7 @@ export function StepChips({ steps }: { steps: LegStep[] }) {
 export function FlatLeg({ v, onClick }: { v: LegView; onClick: () => void }) {
   return (
     <button type="button" className="flat-leg" onClick={onClick} aria-label={`路線：${v.fromName} 到 ${v.toName}`}>
-      <Icon.train />
+      {v.leg?.start_time ? <span className="num" style={{ fontSize: 12 }}>{hhmm(v.leg.start_time)}</span> : <Icon.train />}
       <StepChips steps={v.leg?.steps ?? []} />
     </button>
   );
@@ -186,6 +186,7 @@ export function RoutesTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
                     onClick={(e) => { e.stopPropagation(); void dismiss(v); }}>不需要</button> : null}
                 </span>
                 <StepChips steps={v.leg!.steps} />
+                {legPlans(v.leg).length > 1 ? <span className="muted tiny">共 {legPlans(v.leg).length} 個方案</span> : null}
               </div>
             );
           }
@@ -321,10 +322,10 @@ function placeQuery(rail: RailData | null, stationId: string | undefined, name: 
 }
 
 /** 第 i 步步行的起點、終點：[給 Google 地圖用的, 顯示用的] */
-function walkEnds(leg: RouteLeg, i: number, rail: RailData | null, fromName: string, toName: string) {
-  const s = leg.steps[i];
-  const prev = leg.steps[i - 1];
-  const next = leg.steps[i + 1];
+function walkEnds(steps: LegStep[], i: number, rail: RailData | null, fromName: string, toName: string) {
+  const s = steps[i];
+  const prev = steps[i - 1];
+  const next = steps[i + 1];
   const useFrom = !s.from.trim() || (prev && s.from.trim() === prev.to);
   const useTo = !s.to.trim() || (next && s.to.trim() === next.from);
   return {
@@ -339,6 +340,7 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
   const { trip, leg, ctx } = useLeg(tripId, legId);
   const [diagram, setDiagram] = useState(false);
   const [maps, setMaps] = useState(false);
+  const [planIdx, setPlanIdx] = useState(0);
   const rail = useRail(Boolean(trip && isJapan(trip)));
   const close = () => goBack(leg ? `/t/${tripId}/routes/${leg.date}` : `/t/${tripId}/routes`);
 
@@ -348,14 +350,17 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
   const can = canEditGroup(ctx, leg.date, leg.group_key || null);
   const { from, to, fromName, toName } = endpoints(leg);
   const day = tripDays(trip.start_date, trip.end_date).indexOf(leg.date) + 1;
+  const plans = legPlans(leg);
+  const pi = Math.min(planIdx, plans.length - 1);
+  const steps = plans[pi]?.steps ?? [];
   const timeLine = [
-    from?.start_time ? `${hhmm(from.start_time)} 出發` : '',
+    leg.start_time ? `${hhmm(leg.start_time)} 出發` : from?.start_time ? `${hhmm(from.start_time)} 出發` : '',
     to ? `下一個行程${to.start_time ? ` ${hhmm(to.start_time)}` : ''} ${activityName(to, undefined)}` : '',
   ].filter(Boolean).join('・');
 
   const blocks: ReactNode[] = [];
-  leg.steps.forEach((s, i) => {
-    const prev = leg.steps[i - 1];
+  steps.forEach((s, i) => {
+    const prev = steps[i - 1];
     if (prev && prev.mode === 'rail' && s.mode === 'rail') {
       const same = rail && sameStation(rail, prev.to_station, s.from_station);
       blocks.push(<div key={`t-${s.id}`} className="transfer-note">{same || prev.to === s.from ? `在${s.from || prev.to}轉乘 ${shortLine(s.line)}` : '換車'}</div>);
@@ -395,7 +400,7 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
         </div>,
       );
     } else if (s.mode === 'walk') {
-      const w = walkEnds(leg, i, rail, fromName, toName);
+      const w = walkEnds(steps, i, rail, fromName, toName);
       const url = s.map_url && safeUrl(s.map_url) ? safeUrl(s.map_url)! : directionsUrl(w.origin, w.dest, 'walking');
       blocks.push(
         <div key={s.id} className="walk-card">
@@ -424,7 +429,14 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
           <div className="row-wrap" style={{ fontSize: 18 }}><span>{fromName}</span><span aria-hidden="true">→</span><span>{toName}</span></div>
           {timeLine ? <span className="small muted">{timeLine}</span> : null}
         </div>
-        {leg.steps.length ? blocks : <Notice>還沒有設定怎麼走。{can ? '按右上角「編輯」。' : ''}</Notice>}
+        {plans.length > 1 ? (
+          <div className="segmented" role="radiogroup" aria-label="方案">
+            {plans.map((p, i) => (
+              <button key={p.id} type="button" role="radio" aria-checked={i === pi} className={i === pi ? 'is-on' : ''} onClick={() => setPlanIdx(i)}>{planLabel(p, i)}</button>
+            ))}
+          </div>
+        ) : null}
+        {steps.length ? blocks : <Notice>還沒有設定怎麼走。{can ? '按右上角「編輯」。' : ''}</Notice>}
         <a className="btn btn-secondary btn-block" href={directionsUrl(from ? activityName(from, undefined) : fromName, to ? activityName(to, undefined) : toName, 'transit')}
           target="_blank" rel="noopener noreferrer"><Icon.search /> 用 Google 地圖查怎麼坐</a>
         {leg.notes ? <p className="note-text rich-text">{leg.notes}</p> : null}
@@ -436,7 +448,7 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
           }}>刪除這段路線</Button>
         ) : null}
       </div>
-      {diagram && rail ? <DiagramSheet leg={leg} rail={rail} fromName={fromName} toName={toName} onClose={() => setDiagram(false)} onMaps={() => { setDiagram(false); setMaps(true); }} /> : null}
+      {diagram && rail ? <DiagramSheet steps={steps} rail={rail} fromName={fromName} toName={toName} onClose={() => setDiagram(false)} onMaps={() => { setDiagram(false); setMaps(true); }} /> : null}
       {maps ? <MapsSheet ctx={ctx} onClose={() => setMaps(false)} /> : null}
     </Screen>
   );
@@ -444,18 +456,18 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
 
 // ---------- 沿途路線圖 ----------
 
-function DiagramSheet({ leg, rail, fromName, toName, onClose, onMaps }: {
-  leg: RouteLeg; rail: RailData; fromName: string; toName: string; onClose: () => void; onMaps: () => void;
+function DiagramSheet({ steps, rail, fromName, toName, onClose, onMaps }: {
+  steps: LegStep[]; rail: RailData; fromName: string; toName: string; onClose: () => void; onMaps: () => void;
 }) {
-  const rides = leg.steps.filter((s) => s.mode === 'rail');
+  const rides = steps.filter((s) => s.mode === 'rail');
   const changes = Math.max(0, rides.length - 1);
   const parts: ReactNode[] = [];
-  leg.steps.forEach((s, i) => {
+  steps.forEach((s, i) => {
     const line = s.mode === 'rail' ? lineById(rail, s.line_id) : undefined;
     const path = line && s.from_station && s.to_station ? ridePath(rail, line, s.from_station, s.to_station) : null;
-    const next = leg.steps.slice(i + 1).find((x) => x.mode === 'rail');
+    const next = steps.slice(i + 1).find((x) => x.mode === 'rail');
     if (s.mode !== 'rail') {
-      if (i > 0 && i < leg.steps.length - 1) {
+      if (i > 0 && i < steps.length - 1) {
         parts.push(<div key={s.id} className="dg-gap">{s.mode === 'walk' ? <Icon.walk /> : s.mode === 'bus' ? <Icon.bus /> : null}{stepSummary(s)}{s.to ? `到 ${s.to}` : ''}</div>);
       }
       return;
@@ -608,8 +620,15 @@ function newStep(mode: LegMode): LegStep {
 export function LegForm({ tripId, legId }: { tripId: string; legId: string }) {
   const { trip, leg, ctx } = useLeg(tripId, legId);
   const rail = useRail(Boolean(trip && isJapan(trip)));
-  const [steps, setSteps] = useState<LegStep[]>(() => leg?.steps.length ? structuredClone(leg.steps) : [newStep('walk'), newStep('rail'), newStep('walk')]);
+  const [plans, setPlans] = useState<LegPlan[]>(() => {
+    const ps = legPlans(leg);
+    return ps.length && ps.some((p) => p.steps.length) ? structuredClone(ps) : [{ id: crypto.randomUUID(), label: '', steps: [newStep('walk'), newStep('rail'), newStep('walk')] }];
+  });
+  const [cur, setCur] = useState(0);
+  const [startTime, setStartTime] = useState(leg?.start_time ? leg.start_time.slice(0, 5) : '');
   const [notes, setNotes] = useState(leg?.notes ?? '');
+  const steps = plans[Math.min(cur, plans.length - 1)].steps;
+  const setSteps = (fn: (xs: LegStep[]) => LegStep[]) => setPlans((ps) => ps.map((p, i) => (i === Math.min(cur, ps.length - 1) ? { ...p, steps: fn(p.steps) } : p)));
   const [busy, setBusy] = useState(false);
   const close = () => goBack(`/t/${tripId}/leg/${legId}`);
 
@@ -633,9 +652,9 @@ export function LegForm({ tripId, legId }: { tripId: string; legId: string }) {
   async function save() {
     setBusy(true);
     try {
-      const clean = steps.map((s) => ({ ...s, line: s.line.trim(), from: s.from.trim(), to: s.to.trim(), direction: s.direction.trim(), note: s.note.trim(),
-        map_url: s.map_url?.trim() ? safeUrl(s.map_url) ?? '' : undefined }));
-      await saveLegSteps(store, leg!.id, clean, notes);
+      const clean = plans.map((p) => ({ ...p, label: p.label.trim(), steps: p.steps.map((s) => ({ ...s, line: s.line.trim(), from: s.from.trim(), to: s.to.trim(), direction: s.direction.trim(), note: s.note.trim(),
+        map_url: s.map_url?.trim() ? safeUrl(s.map_url) ?? '' : undefined })) }));
+      await saveLegPlans(store, leg!.id, clean, notes, startTime || null);
       toast('已儲存');
       navigate(`/t/${tripId}/leg/${leg!.id}`, { replace: true });
     } finally {
@@ -647,6 +666,31 @@ export function LegForm({ tripId, legId }: { tripId: string; legId: string }) {
     <Screen header={<TopBar title="編輯路線" subtitle={`${fromName} → ${toName}`} left={<Button variant="text" onClick={close}>取消</Button>}
       right={<Button variant="primary" busy={busy} onClick={save} style={{ minHeight: 44 }}>儲存</Button>} />}>
       <div className="pad stack">
+        <Field label="出發時間（可不填）">
+          <input className="input" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+        </Field>
+        <div className="field">
+          <span className="field-label">方案（第一個會顯示在行程頁）</span>
+          <div className="row-wrap">
+            {plans.map((p, i) => (
+              <button key={p.id} type="button" aria-pressed={i === cur} className={`chip${i === cur ? ' is-on' : ''}`} style={i === cur ? { background: 'var(--pink)' } : undefined}
+                onClick={() => setCur(i)}>{planLabel(p, i)}</button>
+            ))}
+            <button type="button" className="chip" style={{ borderStyle: 'dashed' }} onClick={() => { setPlans((ps) => [...ps, { id: crypto.randomUUID(), label: '', steps: [newStep('walk'), newStep('rail'), newStep('walk')] }]); setCur(plans.length); }}>
+              ＋ 新增方案
+            </button>
+          </div>
+          <div className="input-row">
+            <input className="input" aria-label="方案名稱" value={plans[Math.min(cur, plans.length - 1)].label} placeholder={`名稱，例如：京急到品川（不填就叫${planLabel({ id: '', label: '', steps: [] }, cur)}）`}
+              onChange={(e) => setPlans((ps) => ps.map((p, i) => (i === cur ? { ...p, label: e.target.value } : p)))} />
+          </div>
+          {plans.length > 1 ? (
+            <div className="row-wrap">
+              {cur > 0 ? <Button variant="text" onClick={() => { setPlans((ps) => { const n = [...ps]; const [x] = n.splice(cur, 1); return [x, ...n]; }); setCur(0); }}>設為第一個</Button> : null}
+              <Button variant="text" className="danger" onClick={() => { setPlans((ps) => ps.filter((_, i) => i !== cur)); setCur(0); }}>刪除這個方案</Button>
+            </div>
+          ) : null}
+        </div>
         {steps.map((s, i) => (
           <div key={s.id} className="step-editor">
             <div className="step-editor-head">

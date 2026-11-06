@@ -10,6 +10,7 @@ import { useSyncSummary } from '../ui/SyncBadge.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
 import { RichText } from '../ui/RichText.tsx';
 import { downloadBackup } from './CopyTripPage.tsx';
+import { alreadyImported, importIntoTrip, importSummary, parseImport } from '../data/importer.ts';
 
 export function SettingsTab({ trip }: { trip: Trip }) {
   useData();
@@ -36,6 +37,27 @@ export function SettingsTab({ trip }: { trip: Trip }) {
       toast((e as Error).message, 'error');
     } finally {
       setSavingMe(false);
+    }
+  }
+
+  async function importFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      const d = parseImport(await file.text());
+      const sum = importSummary(d);
+      const again = alreadyImported(trip.settings, d.id);
+      const ok = await confirmDialog({
+        title: again ? '這份行程檔已經匯入過，要再匯入一次嗎？' : `匯入「${d.title}」？`,
+        message: again ? '再匯入一次，行程會重複出現。' : `會加入 ${sum.days} 天、${sum.activities} 個行程、${sum.legs} 段路線、${sum.images} 張圖片${sum.groups ? `，以及 ${sum.groups} 天的分組` : ''}。原本的行程不會被刪除。`,
+        confirmText: '匯入',
+        danger: again,
+      });
+      if (!ok) return;
+      const r = await importIntoTrip(store, trip.id, d);
+      toast(`已匯入 ${r.activities} 個行程${r.addedTravelers.length ? `，新增同行者：${r.addedTravelers.join('、')}` : ''}`);
+      navigate(`/t/${trip.id}/plan/${trip.start_date}`);
+    } catch (e) {
+      toast((e as Error).message, 'error');
     }
   }
 
@@ -154,6 +176,14 @@ export function SettingsTab({ trip }: { trip: Trip }) {
 
       <Section title="備份與範本">
         <List>
+ {editable ? (
+            <label className="row row-btn" style={{ cursor: 'pointer' }}>
+              <span className="row-lead"><Icon.plan /></span>
+              <span className="row-main"><span className="row-title">匯入行程檔</span><span className="row-detail">把整理好的行程（含圖片、分組、路線）一次加進這趟旅行</span></span>
+              <span className="row-trail muted"><Icon.chevron /></span>
+              <input type="file" accept=".json,application/json" hidden aria-label="選擇行程檔" onChange={(e) => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+          ) : null}
           <Row leading={<Icon.download />} title="匯出備份" detail="把整趟旅行存成一個檔案（不含票券圖片）" onClick={() => { downloadBackup(trip.id); toast('已下載備份檔'); }} />
           {user && !user.is_anonymous ? (
             <Row leading={<Icon.copy />} title="複製成新旅行" detail="當作下一趟的範本，可選擇帶不帶行程" onClick={() => navigate(`/t/${trip.id}/copy`)} />

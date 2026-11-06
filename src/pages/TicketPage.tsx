@@ -83,7 +83,7 @@ export function TicketPage({ tripId, ticketId }: { tripId: string; ticketId: str
             <h2 className="section-title">連到的行程</h2>
             {acts.length ? acts.map((a) => (
               <button key={a.id} type="button" className="act" onClick={() => navigate(`/t/${tripId}/a/${a.id}`)}>
-                <span className="act-time">{a.start_time ? hhmm(a.start_time) : '未定'}</span>
+                {a.start_time ? <span className="act-time">{hhmm(a.start_time)}</span> : <span className="act-time blank" aria-hidden="true">00:00</span>}
                 <span className="act-main">
                   <span className="act-title">{activityName(a, store.get('places', a.place_id))}</span>
                   <span className="act-sub muted">Day {daysBetween(trip.start_date, a.date) + 1}・{dayLabel(a.date)}</span>

@@ -77,8 +77,9 @@ jobs:
           v4a=$(curl -sS "$URL/rest/v1/lists?select=id,items,shared&limit=1" -H "apikey: $KEY" || true)
           v4b=$(curl -sS "$URL/rest/v1/route_legs?select=id,steps&limit=1" -H "apikey: $KEY" || true)
           v4c=$(curl -sS "$URL/rest/v1/list_checks?select=id&limit=1" -H "apikey: $KEY" || true)
-          v4d=$(curl -sS "$URL/rest/v1/activities?select=images&limit=1" -H "apikey: $KEY" || true)
-          case "$v4a$v4b$v4c$v4d" in \[*\]\[*\]\[*\]\[*) echo "✅ 第四版資料庫已更新（清單、路線、行程補充圖片）";; *) echo "::error::資料庫還是舊版：請到 Supabase SQL Editor 再貼上執行一次 supabase/schema.sql（$v4a $v4b $v4c $v4d）"; ok=0;; esac
+          v4d=$(curl -sS "$URL/rest/v1/activities?select=images,after_activity_id&limit=1" -H "apikey: $KEY" || true)
+          v4e=$(curl -sS "$URL/rest/v1/route_legs?select=plans&limit=1" -H "apikey: $KEY" || true)
+          case "$v4a$v4b$v4c$v4d$v4e" in \[*\]\[*\]\[*\]\[*\]\[*) echo "✅ 第四版資料庫已更新（清單、路線方案、行程補充圖片、沒時間的排序）";; *) echo "::error::資料庫還是舊版：請到 Supabase SQL Editor 再貼上執行一次 supabase/schema.sql（$v4a $v4b $v4c $v4d $v4e）"; ok=0;; esac
           storage=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL/storage/v1/object/list/trip-files" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{"prefix":""}' || true)
           echo "storage list: $storage"
           settings=$(curl -sS "$URL/auth/v1/settings" -H "apikey: $KEY" || true)

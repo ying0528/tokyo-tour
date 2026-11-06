@@ -1,7 +1,7 @@
 // 儲存動作：一個操作會牽動的資料（景點、交通步驟、票券關聯）都在這裡一起處理，畫面只要呼叫一次。
 import { newActivity, newDayPlan, newLeg, newList, newListCheck, newPlace, newPrivateNote, newRouteStep, newTicket, newTraveler, newTrip } from './factories.ts';
 import type { LocalStore } from './store.ts';
-import type { Activity, ActivityKind, DayPlan, LegStep, ListItem, NamedLink, Place, PlaceKind, PrivateNote, RouteLeg, RouteMode, RouteStep, Ticket, Traveler, Trip, TripList } from './types.ts';
+import type { Activity, ActivityKind, DayPlan, LegPlan, LegStep, ListItem, NamedLink, Place, PlaceKind, PrivateNote, RouteLeg, RouteMode, RouteStep, Ticket, Traveler, Trip, TripList } from './types.ts';
 import { dayLegs, legId, stepFromLegacy } from '../lib/legs.ts';
 import type { LegView } from '../lib/legs.ts';
 import { dayPlanId, isSplit, sortActivities, stableId } from '../lib/plan.ts';
@@ -42,6 +42,8 @@ export interface ActivityDraft {
   links: NamedLink[];
   /** 補充圖片（已存在的用 path；新選的用 blob，儲存時才存到手機） */
   images: { id: string; path?: string; blob?: Blob }[];
+  /** 沒填時間時排在哪個行程後面 */
+  after_activity_id?: string | null;
 }
 
 export function emptyStep(mode: RouteMode = 'subway'): StepDraft {
@@ -73,6 +75,7 @@ export function draftFromActivity(store: LocalStore, a: Activity): ActivityDraft
     from_name: a.from_name, to_name: a.to_name, steps: liveSteps(store, a.id).map(stepToDraft),
     map_url: a.map_url ?? '', links: (a.links ?? []).map((l) => ({ ...l })),
     images: (a.images ?? []).map((x) => ({ ...x })),
+    after_activity_id: a.after_activity_id ?? null,
   };
 }
 
@@ -121,6 +124,7 @@ export async function saveActivity(store: LocalStore, tripId: string, existingId
   const isMove = d.kind === 'move';
   const fields: Partial<Activity> = {
     kind: d.kind, date: d.date, start_time: d.start_time || null, notes: d.notes,
+    after_activity_id: d.start_time ? null : d.after_activity_id ?? null,
     audience_groups: d.audience_groups, audience_travelers: d.audience_travelers,
     place_id: null,
     title: isMove ? '' : d.name.trim(),
@@ -413,7 +417,15 @@ export async function addCustomLeg(store: LocalStore, tripId: string, date: stri
 }
 
 export async function saveLegSteps(store: LocalStore, id: string, steps: LegStep[], notes: string) {
-  await store.update('route_legs', id, { steps, notes, dismissed: false });
+  await store.update('route_legs', id, { steps, plans: [], notes, dismissed: false });
+}
+
+/** 儲存所有方案；第一個方案是主要的（行程頁顯示它） */
+export async function saveLegPlans(store: LocalStore, id: string, plans: LegPlan[], notes: string, startTime: string | null) {
+  const clean = plans.filter((p, i) => i === 0 || p.steps.length || p.label.trim());
+  await store.update('route_legs', id, {
+    plans: clean.length > 1 ? clean : [], steps: clean[0]?.steps ?? [], notes, start_time: startTime || null, dismissed: false,
+  });
 }
 
 /** 自己加的段刪掉；自動產生的段改成「不需要」 */

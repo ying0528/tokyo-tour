@@ -1,5 +1,16 @@
 // 路線：每天（分組的日子每組）相鄰兩個行程之間自動產生一段
-import type { Activity, DayPlan, LegStep, RouteLeg, RouteStep } from '../data/types.ts';
+import type { Activity, DayPlan, LegPlan, LegStep, RouteLeg, RouteStep } from '../data/types.ts';
+
+/** 一段路線的所有方案（舊資料只有 steps 時當作一個方案） */
+export function legPlans(leg: Pick<RouteLeg, 'plans' | 'steps'> | undefined): LegPlan[] {
+  if (!leg) return [];
+  if (leg.plans?.length) return leg.plans;
+  return [{ id: 'main', label: '方案一', steps: leg.steps ?? [] }];
+}
+
+export function planLabel(p: LegPlan, i: number): string {
+  return p.label.trim() || `方案${'一二三四五六七八九十'[i] ?? i + 1}`;
+}
 import { activityName, hhmm, isSplit, sortActivities, stableId, visibleIn } from './plan.ts';
 
 /** 一段路線固定的 id（兩支手機各自建立也不會重複） */
@@ -47,7 +58,8 @@ export function dayLegs(
   const acts = sortActivities(allActivities.filter((a) => a.date === date && !a.deleted_at && a.kind !== 'move'
     && visibleIn(a, plan, split ? g : null, null)));
   const byId = new Map(acts.map((a) => [a.id, a]));
-  const rows = allLegs.filter((l) => l.date === date && l.group_key === g && !l.deleted_at);
+  // 分組的日子：自己那組的路線，加上全員共用的（例如從飯店出發）
+  const rows = allLegs.filter((l) => l.date === date && !l.deleted_at && (l.group_key === g || (split && l.group_key === '')));
   const rowById = new Map(rows.map((l) => [l.id, l]));
   const used = new Set<string>();
   const legs: LegView[] = [];
@@ -56,10 +68,12 @@ export function dayLegs(
   for (let i = 0; i + 1 < acts.length; i++) {
     const from = acts[i];
     const to = acts[i + 1];
-    const id = legId(tripId, date, g, from.id, to.id);
-    const leg = rowById.get(id);
+    const own = legId(tripId, date, g, from.id, to.id);
+    const leg = rowById.get(own)
+      ?? (split ? rows.find((l) => l.group_key === '' && l.from_activity_id === from.id && l.to_activity_id === to.id) : undefined);
+    const id = leg?.id ?? own;
     used.add(id);
-    const view: LegView = { id, leg, from, to, fromName: nameOf(from, ''), toName: nameOf(to, ''), time: hhmm(from.start_time), auto: true };
+    const view: LegView = { id, leg, from, to, fromName: nameOf(from, ''), toName: nameOf(to, ''), time: hhmm(leg?.start_time) || hhmm(from.start_time), auto: true };
     (leg?.dismissed ? dismissed : legs).push(view);
   }
   // 自己加的、或行程改過順序後留下來的
@@ -73,7 +87,7 @@ export function dayLegs(
     const view: LegView = {
       id: leg.id, leg, from, to,
       fromName: nameOf(from, leg.from_name), toName: nameOf(to, leg.to_name),
-      time: hhmm(leg.start_time) || hhmm(from?.start_time) || hhmm(to?.start_time), auto: false,
+      time: hhmm(leg.start_time) || hhmm(from?.start_time), auto: false,
     };
     (leg.dismissed ? dismissed : legs).push(view);
   }

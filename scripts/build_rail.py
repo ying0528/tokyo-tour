@@ -179,6 +179,25 @@ for lid, prefix, frm, to, color, name in LINES:
     'stations': ids, 'codes': codes,
   })
 
+# 直通運轉：實際上同一班車、不用下車的組合，做成一條線，方便選上下車站
+COMPOSITE = [
+  ('Keikyu.AirportShinagawa', '京急機場線（直通品川）', [('Keikyu.Main', '品川', '京急蒲田'), ('Keikyu.Airport', '京急蒲田', None)]),
+]
+by_id = {l['id']: l for l in out_lines}
+for cid, cname, parts in COMPOSITE:
+  ids, codes = [], []
+  for lid, a, b in parts:
+    l = by_id[lid]
+    ja = [norm(stations[i]['title']['ja']) for i in l['stations']]
+    i0 = ja.index(a) + (1 if ids else 0)
+    i1 = ja.index(b) + 1 if b else len(ja)
+    ids += l['stations'][i0:i1]; codes += l['codes'][i0:i1]
+  base = by_id[parts[0][0]]
+  out_lines.insert(out_lines.index(by_id[parts[-1][0]]) + 1, {
+    'id': cid, 'name': cname, 'ja': '京急空港線（品川直通）', 'color': base['color'], 'prefix': base['prefix'],
+    'loop': False, 'stations': ids, 'codes': codes,
+  })
+
 # 車站：名稱、日文名、座標
 out_st = {}
 for i in used:

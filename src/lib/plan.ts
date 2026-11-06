@@ -18,11 +18,11 @@ export const KINDS: Record<ActivityKind, KindInfo> = {
   toilet: { label: '廁所', short: '廁所', bg: '#bde8f0', sub: '#2a5560' },
   lodging: { label: '住宿', short: '住宿', bg: '#e6d4ff', sub: '#4d3a6b' },
   move: { label: '移動', short: '移動', bg: '#e4e8f0', sub: '#454b58' },
-  other: { label: '其他', short: '其他', bg: '#ffffff', sub: '#5b4f63' },
+  other: { label: '不分類', short: '', bg: '#eef0f4', sub: '#4f5563' },
 };
 
 /** 新增／編輯行程時可選的類型 */
-export const ACTIVITY_KINDS: ActivityKind[] = ['sight', 'food', 'lodging'];
+export const ACTIVITY_KINDS: ActivityKind[] = ['sight', 'food', 'lodging', 'other'];
 export const PLACE_KINDS: PlaceKind[] = ['sight', 'food', 'shop', 'toilet', 'lodging', 'other'];
 
 export function isPlaceKind(k: ActivityKind): k is PlaceKind {
@@ -64,18 +64,45 @@ export function endTime(a: Pick<Activity, 'start_time' | 'duration_min'>): strin
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
-/** 依日期、時間排序；沒有時間的排在當天最後，再依建立先後 */
-export function sortActivities<T extends Pick<Activity, 'date' | 'start_time' | 'created_at' | 'id'>>(list: T[]): T[] {
-  return [...list].sort((a, b) => {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    const ta = a.start_time ? minutes(a.start_time) : Infinity;
-    const tb = b.start_time ? minutes(b.start_time) : Infinity;
-    if (ta !== tb) return ta - tb;
+type Sortable = Pick<Activity, 'date' | 'start_time' | 'created_at' | 'id'> & { after_activity_id?: string | null };
+
+/**
+ * 依日期、時間排序。沒填時間的行程排在指定的行程後面（after_activity_id）；
+ * 沒指定的排在當天最後，再依建立先後。
+ */
+export function sortActivities<T extends Sortable>(list: T[]): T[] {
+  const byCreated = (a: T, b: T) => {
     const ca = a.created_at ?? '';
     const cb = b.created_at ?? '';
     if (ca !== cb) return ca < cb ? -1 : 1;
     return a.id < b.id ? -1 : 1;
-  });
+  };
+  const dates = [...new Set(list.map((a) => a.date))].sort();
+  const out: T[] = [];
+  for (const date of dates) {
+    const day = list.filter((a) => a.date === date);
+    const ids = new Set(day.map((a) => a.id));
+    const timed = day.filter((a) => a.start_time).sort((a, b) => minutes(a.start_time!) - minutes(b.start_time!) || byCreated(a, b));
+    const untimed = day.filter((a) => !a.start_time).sort(byCreated);
+    const children = new Map<string, T[]>();
+    const loose: T[] = [];
+    for (const a of untimed) {
+      const anchor = a.after_activity_id;
+      if (anchor && anchor !== a.id && ids.has(anchor)) children.set(anchor, [...(children.get(anchor) ?? []), a]);
+      else loose.push(a);
+    }
+    const seen = new Set<string>();
+    const emit = (a: T) => {
+      if (seen.has(a.id)) return;
+      seen.add(a.id);
+      out.push(a);
+      for (const c of children.get(a.id) ?? []) emit(c);
+    };
+    timed.forEach(emit);
+    loose.forEach(emit);
+    untimed.forEach(emit); // 互相指來指去的（不會發生，保險起見）
+  }
+  return out;
 }
 
 /** 行程顯示的名稱：移動＝「起點－終點」；有自訂名稱用自訂的，否則用景點名稱 */

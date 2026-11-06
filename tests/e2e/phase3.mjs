@@ -104,7 +104,7 @@ await page.getByRole('tab', { name: /Day 3/ }).click();
 // ---------- 類型只剩四種；不連結景點；沒有停留與費用 ----------
 await page.getByRole('button', { name: '新增行程' }).click();
 const kinds = await page.getByRole('radiogroup', { name: '行程類型' }).getByRole('radio').allInnerTexts();
-check(JSON.stringify(kinds) === JSON.stringify(['景點', '用餐', '住宿']), `類型只有景點、用餐、住宿（移動改到路線頁）（${kinds.join('、')}）`);
+check(JSON.stringify(kinds) === JSON.stringify(['景點', '用餐', '住宿', '不分類']), `類型是景點、用餐、住宿、不分類（移動改到路線頁）（${kinds.join('、')}）`);
 check(!(await body()).includes('停留') && !(await body()).includes('費用'), '沒有停留時間與費用欄位');
 await page.getByRole('button', { name: '取消' }).click();
 

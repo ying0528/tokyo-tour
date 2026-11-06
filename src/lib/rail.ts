@@ -166,7 +166,8 @@ function directionLabel(d: RailData, line: RailLine, names: string[]): string {
     // 大江戶線：繞圈的部分用下一站表示，往光丘的部分用終點
     const lastIdx = seqNames.lastIndexOf(names[0]);
     if (seqNames[lastIdx + 1] === next && seqNames.indexOf(names[0]) !== lastIdx) return `往 ${nameZh(last)} 方向`;
-    return `往 ${nameZh(next)} 方向`;
+    // 繞圈的部分：月台寫的是沿途大站，用要去的站最好找
+    return `往 ${nameZh(names[names.length - 1])} 方向`;
   }
   const iFrom = seqNames.indexOf(names[0]);
   const iNext = seqNames.indexOf(next);
@@ -219,5 +220,5 @@ export function stationMapUrl(d: RailData, stationId: string): string {
 export const POPULAR_LINES = [
   'TokyoMetro.Ginza', 'TokyoMetro.Marunouchi', 'TokyoMetro.Hibiya', 'TokyoMetro.Tozai', 'TokyoMetro.Chiyoda',
   'TokyoMetro.Hanzomon', 'Toei.Oedo', 'Toei.Asakusa', 'JR-East.Yamanote', 'JR-East.ChuoRapid',
-  'JR-East.KeihinTohokuNegishi', 'Keikyu.Airport',
+  'JR-East.KeihinTohokuNegishi', 'Keikyu.AirportShinagawa', 'TokyoMonorail.HanedaAirport',
 ];

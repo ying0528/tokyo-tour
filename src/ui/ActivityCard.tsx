@@ -31,9 +31,7 @@ export function ActivityCard({ a, ticketCount, onClick, showDate }: {
   const flat = a.kind === 'move';
   return (
     <button type="button" className={`act${flat ? ' flat' : ''}`} style={{ background: kind.bg }} onClick={onClick}>
-      <span className={`act-time${a.start_time ? '' : ' none'}`}>
-        {a.start_time ? hhmm(a.start_time) : '未定'}
-      </span>
+      {a.start_time ? <span className="act-time">{hhmm(a.start_time)}</span> : <span className="act-time blank" aria-hidden="true">00:00</span>}
       <span className="act-main">
         <span className="act-title">{name}</span>
         {showDate || sub ? (
@@ -41,7 +39,7 @@ export function ActivityCard({ a, ticketCount, onClick, showDate }: {
         ) : null}
       </span>
       <span className={flat ? 'act-tags inline' : 'act-tags'}>
-        <span className="tag">{kind.short}</span>
+        {kind.short ? <span className="tag">{kind.short}</span> : null}
         {ticketCount ? <span className="tag">票券 {ticketCount}</span> : null}
       </span>
     </button>

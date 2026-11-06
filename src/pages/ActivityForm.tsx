@@ -7,7 +7,7 @@ import { dayPlanOf, draftFromActivity, emptyStep, saveActivity, validateActivity
 import type { ActivityDraft, StepDraft } from '../data/actions.ts';
 import type { ActivityKind, NamedLink, RouteMode } from '../data/types.ts';
 import { dayLabel, daysBetween, tripDays } from '../lib/dates.ts';
-import { ACTIVITY_KINDS, groupName, isSplit, isTransit, KINDS, ROUTE_MODES } from '../lib/plan.ts';
+import { ACTIVITY_KINDS, activityName, groupName, isSplit, isTransit, KINDS, ROUTE_MODES, sortActivities } from '../lib/plan.ts';
 import { Button, Empty, Field, Screen, TextArea, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
@@ -126,6 +126,7 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
   const userGroup = ctx.editable ? null : myGroupOn(ctx, d.date);
 
   const plan = dayPlanOf(store, tripId, d.date);
+  const sameDay = sortActivities(store.byTrip('activities', tripId).filter((a) => a.date === d.date && a.id !== activityId));
   const split = isSplit(plan);
   // 舊資料可能是其他類型（買買買、廁所…），編輯時保留選項
   const kinds: ActivityKind[] = ACTIVITY_KINDS.includes(d.kind) ? ACTIVITY_KINDS : [...ACTIVITY_KINDS, d.kind];
@@ -240,6 +241,16 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
             <input id="act-time" className="input" type="time" value={d.start_time ?? ''} onChange={(e) => set({ start_time: e.target.value || null })} />
           </div>
         </div>
+        {!d.start_time ? (
+          <div className="field">
+            <label className="field-label" htmlFor="act-after">沒填時間：排在哪個行程後面</label>
+            <select id="act-after" className="input" value={d.after_activity_id ?? ''} onChange={(e) => set({ after_activity_id: e.target.value || null })}>
+              <option value="">當天最後</option>
+              {sameDay.map((a) => <option key={a.id} value={a.id}>{a.start_time ? `${a.start_time.slice(0, 5)} ` : ''}{activityName(a, undefined)}</option>)}
+            </select>
+            <span className="field-hint">時間可以不填，行程頁時間格會空著。</span>
+          </div>
+        ) : null}
 
         {!ctx.editable && userGroup ? (
           <p className="notice small">這筆行程只有「{groupName(plan, userGroup)}」看得到。</p>
