@@ -33,6 +33,10 @@ export interface Trip extends SyncedBase {
 export interface TripSettings {
   /** 是否顯示「已完成」打勾功能（預設關閉） */
   show_done?: boolean;
+  /** 路線頁「完整路線圖」：管理者上傳的圖片 */
+  maps?: { id: string; label: string; path: string }[];
+  /** 已把舊的「移動」行程轉成路線 */
+  moves_converted?: boolean;
 }
 
 export interface Traveler extends TripContent {
@@ -131,6 +135,75 @@ export interface DayPlan extends TripContent {
   notes: string;
 }
 
+/** 清單的一項：文字或連結（擇一） */
+export interface ListItem {
+  id: string;
+  kind: 'text' | 'link';
+  /** 文字項目的內容；連結項目顯示的名字 */
+  text: string;
+  url?: string;
+}
+
+/** 清單：每個人自己的，可以分享給大家看 */
+export interface TripList extends TripContent {
+  owner_id: string;
+  title: string;
+  icon: string;
+  shared: boolean;
+  sort_order: number;
+  items: ListItem[];
+}
+
+/** 清單打勾：每個人自己的 */
+export interface ListCheck extends TripContent {
+  list_id: string;
+  user_id: string;
+  checked: string[];
+}
+
+export type LegMode = 'rail' | 'bus' | 'walk' | 'other';
+
+/** 一段路線中的一步 */
+export interface LegStep {
+  id: string;
+  mode: LegMode;
+  /** 內建路線資料的 id（日本時區時） */
+  line_id?: string;
+  /** 路線名稱（自己填或從內建資料帶入） */
+  line: string;
+  color?: string;
+  /** 路線代號，例如 G、JY */
+  code?: string;
+  /** 上車／下車站（或步行的起點、終點） */
+  from: string;
+  to: string;
+  from_station?: string;
+  to_station?: string;
+  from_code?: string;
+  to_code?: string;
+  direction: string;
+  stops?: number | null;
+  note: string;
+  /** 自己貼的地圖連結（步行地圖或站牌位置） */
+  map_url?: string;
+}
+
+/** 一段路線：某天（某組）從一個行程到下一個行程 */
+export interface RouteLeg extends TripContent {
+  date: ISODate;
+  group_key: string;
+  from_activity_id: string | null;
+  to_activity_id: string | null;
+  from_name: string;
+  to_name: string;
+  start_time: ISOTime | null;
+  custom: boolean;
+  /** 按了「不需要」 */
+  dismissed: boolean;
+  steps: LegStep[];
+  notes: string;
+}
+
 export interface PersonalStatus extends TripContent {
   activity_id: string;
   traveler_id: string;
@@ -149,6 +222,9 @@ export const TABLES = [
   'day_plans',
   'personal_status',
   'private_notes',
+  'lists',
+  'list_checks',
+  'route_legs',
 ] as const;
 
 export type TableName = (typeof TABLES)[number];
@@ -163,6 +239,9 @@ export interface RowMap {
   day_plans: DayPlan;
   personal_status: PersonalStatus;
   private_notes: PrivateNote;
+  lists: TripList;
+  list_checks: ListCheck;
+  route_legs: RouteLeg;
 }
 
 export type AnyRow = RowMap[TableName];

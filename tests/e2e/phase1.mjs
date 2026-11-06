@@ -100,9 +100,9 @@ await shot('長內容捲到底');
 // 5. 邀請連結
 await body.evaluate((el) => el.scrollTo(0, 0));
 await page.getByRole('button', { name: /成員與邀請連結/ }).click();
-await page.getByRole('radio', { name: '只能查看' }).click();
+await page.getByRole('radio', { name: '使用者' }).click();
 await page.getByRole('button', { name: /產生並分享邀請連結/ }).click();
-await page.getByText('只能查看的邀請連結').waitFor();
+await page.getByText('使用者的邀請連結').waitFor();
 await shot('成員與邀請');
 const token = await page.evaluate(() => JSON.parse(localStorage.getItem('fake-server')).invites[0].token);
 check(Boolean(token), '產生邀請碼');
@@ -146,8 +146,8 @@ await page.getByRole('button', { name: '加入這趟旅行' }).click();
 await page.getByRole('tab', { name: /Day 1/ }).waitFor();
 check(true, '家人用邀請連結加入，不需註冊');
 await page.getByRole('button', { name: '旅伴・設定' }).click();
-await page.getByText('你的權限：只能查看').waitFor();
-check(!(await page.getByRole('button', { name: '新增' }).count()), '只能查看的成員沒有新增按鈕');
+await page.getByText('你的權限：使用者').waitFor();
+check(!(await page.getByRole('button', { name: '新增' }).count()), '使用者不能新增同行者');
 check(await page.getByLabel('我是誰').inputValue() !== '', '加入時選的身分已記住');
 await shot('家人的設定頁');
 

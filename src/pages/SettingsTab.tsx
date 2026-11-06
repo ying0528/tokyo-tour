@@ -93,7 +93,7 @@ export function SettingsTab({ trip }: { trip: Trip }) {
       <Section title="旅程資訊">
         <List>
           <Row title={trip.title || '未命名旅行'}
-            detail={<>{[trip.destination, rangeLabel(trip.start_date, trip.end_date), `${dayCount(trip.start_date, trip.end_date)} 天`].filter(Boolean).join('・')}<br />時區：{tzLabel}</>}
+            detail={<>{[trip.destination, rangeLabel(trip.start_date, trip.end_date), `${dayCount(trip.start_date, trip.end_date)} 天`].filter(Boolean).join('・')}<br />時區：{tzLabel}{trip.timezone === 'Asia/Tokyo' ? '（路線頁使用東京地鐵版本）' : ''}</>}
             onClick={editable ? () => navigate(`/t/${trip.id}/edit`) : undefined} />
         </List>
         {trip.notes ? <RichText text={trip.notes} className="note-text" /> : null}
@@ -172,7 +172,7 @@ export function SettingsTab({ trip }: { trip: Trip }) {
             <Row leading={<Icon.logout />} title="離開這趟旅行" danger onClick={leave} />
           )}
         </List>
-        {role !== 'owner' ? <p className="muted small">你的權限：{role === 'editor' ? '可編輯' : '只能查看'}</p> : null}
+        {role !== 'owner' ? <p className="muted small">你的權限：{role === 'editor' ? '管理者（可以編輯所有內容）' : '使用者（可以改分組那天自己那組的行程、自己的備忘錄、清單、票券）'}</p> : null}
       </Section>
     </div>
   );

@@ -67,7 +67,7 @@ export class MemoryPersistence implements Persistence {
 }
 
 const DB_NAME = 'family-trip';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORES = [...TABLES, 'outbox', 'meta', 'files'];
 
 /**

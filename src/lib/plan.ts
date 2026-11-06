@@ -22,7 +22,7 @@ export const KINDS: Record<ActivityKind, KindInfo> = {
 };
 
 /** 新增／編輯行程時可選的類型 */
-export const ACTIVITY_KINDS: ActivityKind[] = ['sight', 'food', 'move', 'lodging'];
+export const ACTIVITY_KINDS: ActivityKind[] = ['sight', 'food', 'lodging'];
 export const PLACE_KINDS: PlaceKind[] = ['sight', 'food', 'shop', 'toilet', 'lodging', 'other'];
 
 export function isPlaceKind(k: ActivityKind): k is PlaceKind {

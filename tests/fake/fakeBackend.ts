@@ -35,6 +35,7 @@ export class FakeServer {
 
   constructor(data?: ServerData) {
     this.data = data ?? emptyData();
+    for (const t of TABLES) this.data.tables[t] ??= {};
   }
 
   private tick(): string {
@@ -57,6 +58,43 @@ export class FakeServer {
   private canEdit(tripId: string, user: string | null) {
     const r = this.role(tripId, user);
     return r === 'owner' || r === 'editor';
+  }
+
+  /** 我在某天分到哪一組（那天沒分組就是 null） */
+  myGroup(tripId: string, date: string, user: string | null): string | null {
+    const m = this.data.members.find((x) => x.trip_id === tripId && x.user_id === user);
+    if (!m?.traveler_id) return null;
+    const plan = Object.values(this.data.tables.day_plans).find((p) => p.trip_id === tripId && p.date === date && !p.deleted_at);
+    if (!plan || plan.mode !== 'split') return null;
+    const g = (plan.assignments as Record<string, string>)[m.traveler_id];
+    return g && (plan.groups as string[]).includes(g) ? g : null;
+  }
+
+  /** 同 supabase/schema.sql 的 RLS：這個人能不能寫入這筆資料 */
+  canWrite(table: TableName, row: Record<string, unknown>, user: string | null): boolean {
+    const trip = this.tripIdOf(table, row);
+    if (!this.role(trip, user)) return false;
+    if (table === 'private_notes' || table === 'list_checks') return row.user_id === user;
+    if (table === 'lists') return row.owner_id === user;
+    if (this.canEdit(trip, user)) return true;
+    if (table === 'activities') {
+      const groups = (row.audience_groups as string[]) ?? [];
+      return ((row.audience_travelers as string[]) ?? []).length === 0 && groups.length === 1 && groups[0] === this.myGroup(trip, row.date as string, user);
+    }
+    if (table === 'tickets') {
+      const ids = (row.traveler_ids as string[]) ?? [];
+      const me = this.data.members.find((x) => x.trip_id === trip && x.user_id === user)?.traveler_id;
+      return ids.length === 1 && Boolean(me) && ids[0] === me;
+    }
+    if (table === 'route_legs') return row.group_key !== '' && row.group_key === this.myGroup(trip, row.date as string, user);
+    return false;
+  }
+
+  canSee(table: TableName, row: Record<string, unknown>, user: string | null): boolean {
+    if (!this.role(this.tripIdOf(table, row), user)) return false;
+    if (table === 'private_notes' || table === 'list_checks') return row.user_id === user;
+    if (table === 'lists') return row.owner_id === user || Boolean(row.shared);
+    return true;
   }
 
   private tripIdOf(table: TableName, row: Record<string, unknown>) {
@@ -83,12 +121,10 @@ export class FakeServer {
         if (store[row.id]) throw new RemoteError('duplicate', 'duplicate key value violates unique constraint');
         if (table === 'trips') {
           if (!user || user.is_anonymous || row.owner_id !== user.id) throw new RemoteError('permission', '沒有權限');
-        } else if (table === 'private_notes') {
-          if (!s.role(row.trip_id as string, uid())) throw new RemoteError('permission', '沒有權限');
-          row.user_id = row.user_id ?? uid();
-          if (row.user_id !== uid()) throw new RemoteError('permission', '不能替別人寫備忘錄');
-        } else if (!s.canEdit(row.trip_id as string, uid())) {
-          throw new RemoteError('permission', '沒有權限（可能是只能查看的成員）');
+        } else {
+          if (table === 'private_notes' || table === 'list_checks') row.user_id = row.user_id ?? uid();
+          if (table === 'lists') row.owner_id = row.owner_id ?? uid();
+          if (!s.canWrite(table, row, uid())) throw new RemoteError('permission', '沒有權限（使用者只能改自己的內容）');
         }
         if (table === 'activities' && row.place_id && !s.data.tables.places[row.place_id as string]) {
           throw new RemoteError('reference', '關聯的資料已不存在');
@@ -110,9 +146,11 @@ export class FakeServer {
       async update(table, id, patch, baseRev) {
         s.guard();
         const row = s.data.tables[table][id];
-        if (!row || !s.role(s.tripIdOf(table, row), uid())) return null;
-        if (table === 'private_notes' && row.user_id !== uid()) return null;
-        if (table !== 'private_notes' && !s.canEdit(s.tripIdOf(table, row), uid())) throw new RemoteError('permission', '沒有權限（可能是只能查看的成員）');
+        if (!row || !s.canSee(table, row, uid())) return null;
+        if (!s.canWrite(table, row, uid()) || !s.canWrite(table, { ...row, ...patch }, uid())) {
+          if (table === 'private_notes' || table === 'list_checks' || table === 'lists') return null;
+          throw new RemoteError('permission', '沒有權限（使用者只能改自己的內容）');
+        }
         if (row.rev !== baseRev) return null;
         if (table === 'activities' && patch.place_id && !s.data.tables.places[patch.place_id as string]) {
           throw new RemoteError('reference', '關聯的資料已不存在');
@@ -133,8 +171,7 @@ export class FakeServer {
       async fetchOne(table, id) {
         s.guard();
         const row = s.data.tables[table][id];
-        if (!row || !s.role(s.tripIdOf(table, row), uid())) return null;
-        if (table === 'private_notes' && row.user_id !== uid()) return null;
+        if (!row || !s.canSee(table, row, uid())) return null;
         return clone(row) as unknown as AnyRow;
       },
       async hardDelete(table, id) {
@@ -160,8 +197,12 @@ export class FakeServer {
         if (!s.role(tripId, uid())) return [];
         const from = since ? new Date(Date.parse(since) - 120000).toISOString() : null;
         return Object.values(s.data.tables[table])
-          .filter((r) => r.trip_id === tripId && (!from || r.updated_at > from) && (table !== 'private_notes' || r.user_id === uid()))
+          .filter((r) => r.trip_id === tripId && (!from || r.updated_at > from) && s.canSee(table, r, uid()))
           .map(clone) as unknown as AnyRow[];
+      },
+      async listIds(table, tripId) {
+        s.guard();
+        return Object.values(s.data.tables[table]).filter((r) => r.trip_id === tripId && s.canSee(table, r, uid())).map((r) => r.id);
       },
       async listMembers(tripId) {
         s.guard();
@@ -247,7 +288,7 @@ export class FakeServer {
       async uploadFile(path, blob) {
         s.guard();
         const trip = path.split('/')[0];
-        if (!s.canEdit(trip, uid())) throw new RemoteError('permission', '沒有權限上傳');
+        if (!s.role(trip, uid())) throw new RemoteError('permission', '沒有權限上傳');
         s.files.set(path, blob);
       },
       async downloadFile(path) {

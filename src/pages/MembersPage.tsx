@@ -7,7 +7,7 @@ import { Badge, BackButton, Button, List, Notice, Row, Screen, Section, Segmente
 import { Icon } from '../ui/icons.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
 
-const ROLE_TEXT: Record<Role, string> = { owner: '擁有者', editor: '可編輯', viewer: '只能查看' };
+const ROLE_TEXT: Record<Role, string> = { owner: '管理者（建立者）', editor: '管理者', viewer: '使用者' };
 
 export function inviteUrl(token: string) {
   return `${location.origin}${location.pathname}#/join/${token}`;
@@ -88,7 +88,7 @@ export function MembersPage({ tripId }: { tripId: string }) {
     const next: Role = m.role === 'editor' ? 'viewer' : 'editor';
     const ok = await confirmDialog({
       title: `改成「${ROLE_TEXT[next]}」？`,
-      message: next === 'editor' ? '這位成員將可以新增、修改、刪除行程。' : '這位成員將只能查看，不能修改。',
+      message: next === 'editor' ? '管理者可以編輯所有內容。' : '使用者只能編輯分組那天自己那組的行程與路線、自己的備忘錄、清單和票券。',
       confirmText: '確定',
     });
     if (!ok) return;
@@ -157,7 +157,8 @@ export function MembersPage({ tripId }: { tripId: string }) {
             <div className="card stack">
               <p className="small">產生一個連結傳給家人（LINE、訊息都可以）。家人打開後選「我是誰」就能加入，<strong>不需要註冊</strong>。</p>
               <Segmented label="權限" value={newRole} onChange={setNewRole}
-                options={[{ value: 'viewer', label: '只能查看' }, { value: 'editor', label: '可以編輯' }]} />
+                options={[{ value: 'viewer', label: '使用者' }, { value: 'editor', label: '管理者' }]} />
+              <p className="muted tiny">{newRole === 'editor' ? '管理者：可以編輯所有內容。' : '使用者：只能改分組那天自己那組的行程與路線，以及自己的備忘錄、清單、票券。'}</p>
               <Button variant="primary" block busy={busy} disabled={!online} onClick={createInvite}>
                 <Icon.share /> 產生並分享邀請連結
               </Button>
@@ -182,7 +183,7 @@ export function MembersPage({ tripId }: { tripId: string }) {
             <p className="muted small">連結可以重複使用（例如換手機時再打開一次）。不想再讓人加入時按「停用」。</p>
           </Section>
         ) : (
-          <Notice>只有可編輯的成員能邀請其他人。</Notice>
+          <Notice>只有管理者能邀請其他人。</Notice>
         )}
       </div>
     </Screen>

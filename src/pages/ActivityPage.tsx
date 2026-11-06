@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
-import { myTickets, tripCtx } from '../app/tripContext.ts';
+import { canAddTicket, canEditActivity, myTickets, tripCtx } from '../app/tripContext.ts';
 import { deleteActivity, getPrivateNote, linkLabel, liveSteps, restoreActivity, savePrivateNote } from '../data/actions.ts';
 import type { RouteStep } from '../data/types.ts';
 import { dayLabel, daysBetween } from '../lib/dates.ts';
@@ -104,6 +104,7 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
   const dayN = daysBetween(trip.start_date, a.date) + 1;
   const map = a.map_url ? safeUrl(a.map_url) : null;
   const links = (a.links ?? []).filter((l) => safeUrl(l.url));
+  const canEdit = canEditActivity(ctx, a);
   const tickets = myTickets(ctx).filter((t) => t.activity_ids.includes(a.id)).sort((x, y) => x.sort_order - y.sort_order);
 
   async function remove() {
@@ -123,7 +124,7 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
     <Screen header={
       <TopBar title={`Day ${dayN}・${dayLabel(a.date)}`}
         left={<BackButton onClick={back} />}
-        right={ctx.editable ? <Button variant="ghost" onClick={() => navigate(`/t/${tripId}/a/${a.id}/edit`)}>編輯</Button> : null} />
+        right={canEdit ? <Button variant="ghost" onClick={() => navigate(`/t/${tripId}/a/${a.id}/edit`)}>編輯</Button> : null} />
     }>
       <div className="pad stack">
         <div className="detail-hero" style={{ background: kind.bg }}>
@@ -154,10 +155,11 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
         {a.kind === 'move' ? (
           <div className="stack-sm">
             <h2 className="section-title">怎麼去</h2>
+            {ctx.editable ? <p className="muted small">這是舊版的「移動」行程，可以到「路線」頁把它轉成路線。</p> : null}
             {steps.length ? (
               <div className="steps">{steps.map((s) => <StepView key={s.id} s={s} />)}</div>
             ) : (
-              <p className="notice small">還沒有交通步驟。{ctx.editable ? '按右上角「編輯」加入。' : ''}</p>
+              <p className="notice small">還沒有交通步驟。{canEdit ? '按右上角「編輯」加入。' : ''}</p>
             )}
           </div>
         ) : null}
@@ -165,7 +167,7 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
         <div className="stack-sm">
           <div className="section-head">
             <h2 className="section-title">我的票券</h2>
-            {ctx.editable ? (
+            {canAddTicket(ctx) ? (
               <button type="button" className="link-btn" onClick={() => navigate(`/t/${tripId}/tk/new/${a.id}`)}>＋ 加票券</button>
             ) : null}
           </div>
@@ -176,7 +178,7 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
 
         {user ? <PrivateMemo tripId={tripId} activityId={a.id} userId={user.id} /> : null}
 
-        {ctx.editable ? (
+        {canEdit ? (
           <Button variant="danger" block onClick={remove}><Icon.trash /> 刪除這筆行程</Button>
         ) : null}
       </div>

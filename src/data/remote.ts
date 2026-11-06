@@ -20,7 +20,7 @@ export function classifyError(err: { message?: string; code?: string } | null | 
   }
   if (code === '23505') return new RemoteError('duplicate', message);
   if (code === '42501' || /row-level security|permission denied/i.test(message)) {
-    return new RemoteError('permission', '沒有權限（可能是只能查看的成員）');
+    return new RemoteError('permission', '沒有權限（使用者只能改自己的內容）');
   }
   if (code === '23503') return new RemoteError('reference', '關聯的資料已不存在');
   if (code === 'PGRST116') return new RemoteError('not_found', '找不到資料');
@@ -55,6 +55,8 @@ export interface Remote {
   hardDelete(table: TableName, id: string): Promise<void>;
   listTrips(): Promise<Trip[]>;
   pullTable(table: Exclude<TableName, 'trips'>, tripId: string, since: string | null): Promise<AnyRow[]>;
+  /** 某趟旅行中我看得到的資料 id（用來發現別人取消分享的清單） */
+  listIds(table: Exclude<TableName, 'trips'>, tripId: string): Promise<string[]>;
   listMembers(tripId: string): Promise<Member[]>;
   listInvites(tripId: string): Promise<Invite[]>;
   createInvite(tripId: string, role: 'editor' | 'viewer', seeAll: boolean): Promise<Invite>;

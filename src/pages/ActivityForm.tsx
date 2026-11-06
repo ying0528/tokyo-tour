@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
-import { tripCtx } from '../app/tripContext.ts';
+import { canEditActivity, myGroupOn, tripCtx } from '../app/tripContext.ts';
 import { dayPlanOf, draftFromActivity, emptyStep, saveActivity, validateActivity } from '../data/actions.ts';
 import type { ActivityDraft, StepDraft } from '../data/actions.ts';
 import type { ActivityKind, NamedLink, RouteMode } from '../data/types.ts';
@@ -100,9 +100,12 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
     return <Screen header={<TopBar title="行程" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="找不到這筆行程" /></Screen>;
   }
   const ctx = tripCtx(trip, user);
-  if (!ctx.editable) {
-    return <Screen header={<TopBar title="行程" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="你只能查看這趟旅行">請管理者把你的權限改成「可以編輯」。</Empty></Screen>;
+  // 使用者：只能新增、修改分組那天自己那一組的行程
+  const userDays = ctx.editable ? days : days.filter((x) => myGroupOn(ctx, x));
+  if (!ctx.editable && (existing ? !canEditActivity(ctx, existing) : !userDays.length)) {
+    return <Screen header={<TopBar title="行程" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="只能看，不能改">使用者只能新增、修改分組那天自己那一組的行程。</Empty></Screen>;
   }
+  const userGroup = ctx.editable ? null : myGroupOn(ctx, d.date);
 
   const plan = dayPlanOf(store, tripId, d.date);
   const split = isSplit(plan);
@@ -138,6 +141,12 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
 
   async function save() {
     const draft: ActivityDraft = { ...d, steps: d.kind === 'move' ? d.steps : [] };
+    if (!ctx.editable) {
+      const g = myGroupOn(ctx, draft.date);
+      if (!g) return setError({ field: 'save', message: '這天沒有分組，只有管理者可以新增行程' });
+      draft.audience_groups = [g];
+      draft.audience_travelers = [];
+    }
     const v = validateActivity(draft);
     if (v) return setError(v);
     if (existing?.kind === 'move' && draft.kind !== 'move' && d.steps.some((s) => s.id)) {
@@ -203,9 +212,9 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
         <div className="grid-2">
           <div className="field">
             <label className="field-label" htmlFor="act-date">哪一天</label>
-            <select id="act-date" className="input" value={d.date} onChange={(e) => set({ date: e.target.value, audience_groups: [] })}>
-              {days.includes(d.date) ? null : <option value={d.date}>{dayLabel(d.date)}（不在旅行日期內）</option>}
-              {days.map((x) => <option key={x} value={x}>Day {daysBetween(trip.start_date, x) + 1}・{dayLabel(x)}</option>)}
+            <select id="act-date" className="input" value={d.date} onChange={(e) => set({ date: e.target.value, audience_groups: ctx.editable ? [] : [myGroupOn(ctx, e.target.value) ?? ''] })}>
+              {userDays.includes(d.date) ? null : <option value={d.date}>{dayLabel(d.date)}{days.includes(d.date) ? '' : '（不在旅行日期內）'}</option>}
+              {userDays.map((x) => <option key={x} value={x}>Day {daysBetween(trip.start_date, x) + 1}・{dayLabel(x)}</option>)}
             </select>
           </div>
           <div className="field">
@@ -214,7 +223,9 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
           </div>
         </div>
 
-        {split || d.audience_groups.length || d.audience_travelers.length ? (
+        {!ctx.editable && userGroup ? (
+          <p className="notice small">這筆行程只有「{groupName(plan, userGroup)}」看得到。</p>
+        ) : split || d.audience_groups.length || d.audience_travelers.length ? (
           <div className="field">
             <span className="field-label">誰會看到</span>
             <div className="chips" role="group" aria-label="誰會看到">

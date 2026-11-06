@@ -97,6 +97,10 @@ export function createBackend(): Backend {
       if (since) q = q.gt('updated_at', new Date(new Date(since).getTime() - PULL_OVERLAP_MS).toISOString());
       return (await check(q.order('updated_at').limit(5000))) as AnyRow[];
     },
+    async listIds(table, tripId) {
+      const rows = await check(client.from(table).select('id').eq('trip_id', tripId).limit(10000));
+      return (rows as { id: string }[]).map((r) => r.id);
+    },
     async listMembers(tripId) {
       return (await check(client.from('trip_members').select().eq('trip_id', tripId))) as Member[];
     },

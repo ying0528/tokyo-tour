@@ -1,5 +1,5 @@
 // 建立新資料時的預設值（id 由手機產生，離線也能新增）
-import type { Activity, DayPlan, Place, PrivateNote, RouteStep, Ticket, Traveler, Trip } from './types.ts';
+import type { Activity, DayPlan, ListCheck, Place, PrivateNote, RouteLeg, RouteStep, Ticket, Traveler, Trip, TripList } from './types.ts';
 
 const base = () => ({
   id: crypto.randomUUID(),
@@ -70,4 +70,19 @@ export function newTicket(tripId: string, fields: Partial<Ticket> = {}): Ticket 
 
 export function newPrivateNote(tripId: string, activityId: string, userId: string, id: string, note: string): PrivateNote {
   return { ...base(), id, trip_id: tripId, activity_id: activityId, user_id: userId, note };
+}
+
+export function newList(tripId: string, ownerId: string, fields: Partial<TripList> = {}): TripList {
+  return { ...base(), trip_id: tripId, owner_id: ownerId, title: '', icon: '', shared: false, sort_order: 0, items: [], ...fields };
+}
+
+export function newListCheck(tripId: string, listId: string, userId: string, id: string, checked: string[]): ListCheck {
+  return { ...base(), id, trip_id: tripId, list_id: listId, user_id: userId, checked };
+}
+
+export function newLeg(tripId: string, fields: Partial<RouteLeg> & Pick<RouteLeg, 'date'>): RouteLeg {
+  return {
+    ...base(), trip_id: tripId, group_key: '', from_activity_id: null, to_activity_id: null, from_name: '', to_name: '',
+    start_time: null, custom: false, dismissed: false, steps: [], notes: '', ...fields,
+  };
 }

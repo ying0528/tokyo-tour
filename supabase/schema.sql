@@ -281,6 +281,66 @@ create table if not exists public.private_notes (
 );
 create index if not exists private_notes_sync_idx on public.private_notes(trip_id, updated_at);
 
+-- ---------- 第四版：清單（每個人自己的，可以分享給大家看）----------
+-- items：[{"id":"…","kind":"text"|"link","text":"顯示文字","url":"https://…"}]
+create table if not exists public.lists (
+  id uuid primary key,
+  trip_id uuid not null references public.trips(id) on delete cascade,
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  title text not null default '',
+  icon text not null default '',
+  shared boolean not null default false,
+  sort_order double precision not null default 0,
+  items jsonb not null default '[]'::jsonb,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  rev bigint not null default 0
+);
+create index if not exists lists_sync_idx on public.lists(trip_id, updated_at);
+
+-- 清單打勾：每個人自己的，別人看不到（在別人分享的清單上打勾也不會影響對方）
+create table if not exists public.list_checks (
+  id uuid primary key,
+  trip_id uuid not null references public.trips(id) on delete cascade,
+  list_id uuid not null references public.lists(id) on delete cascade,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  checked jsonb not null default '[]'::jsonb,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  rev bigint not null default 0
+);
+create index if not exists list_checks_sync_idx on public.list_checks(trip_id, updated_at);
+
+-- ---------- 第四版：路線（行程與行程之間怎麼走）----------
+-- 每天（分組的日子每組）相鄰兩個行程之間是一段；steps：
+-- [{"id":"…","mode":"rail"|"bus"|"walk"|"other","line_id":"…","line":"…","color":"#…","code":"G",
+--   "from":"…","to":"…","from_station":"…","to_station":"…","direction":"…","stops":2,"note":"…","map_url":"…"}]
+create table if not exists public.route_legs (
+  id uuid primary key,
+  trip_id uuid not null references public.trips(id) on delete cascade,
+  date date not null,
+  group_key text not null default '',
+  from_activity_id uuid,
+  to_activity_id uuid,
+  from_name text not null default '',
+  to_name text not null default '',
+  start_time time,
+  custom boolean not null default false,
+  dismissed boolean not null default false,
+  steps jsonb not null default '[]'::jsonb,
+  notes text not null default '',
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  rev bigint not null default 0
+);
+create index if not exists route_legs_sync_idx on public.route_legs(trip_id, updated_at);
+
 -- ---------- 索引（同步時依旅行與更新時間查詢）----------
 create index if not exists trips_updated_idx on public.trips(updated_at);
 create index if not exists travelers_sync_idx on public.travelers(trip_id, updated_at);
@@ -297,11 +357,11 @@ create index if not exists trip_members_user_idx on public.trip_members(user_id)
 do $$
 declare t text;
 begin
-  foreach t in array array['trips','travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes'] loop
+  foreach t in array array['trips','travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes','lists','list_checks','route_legs'] loop
     execute format('drop trigger if exists touch on public.%I', t);
     execute format('create trigger touch before insert or update on public.%I for each row execute function public.tg_touch()', t);
   end loop;
-  foreach t in array array['travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes'] loop
+  foreach t in array array['travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes','lists','list_checks','route_legs'] loop
     execute format('drop trigger if exists lock_trip on public.%I', t);
     execute format('create trigger lock_trip before update on public.%I for each row execute function public.tg_lock_trip()', t);
   end loop;
@@ -422,11 +482,11 @@ drop policy if exists invites_all on public.trip_invites;
 create policy invites_all on public.trip_invites for all to authenticated
   using (public.can_edit(trip_id)) with check (public.can_edit(trip_id));
 
--- 一般內容表：成員可看，可編輯者可改
+-- 一般內容表：成員可看，管理者可改
 do $$
 declare t text;
 begin
-  foreach t in array array['travelers','places','activities','route_steps','tickets','day_plans'] loop
+  foreach t in array array['travelers','places','route_steps','day_plans'] loop
     execute format('drop policy if exists %I on public.%I', t || '_select', t);
     execute format('create policy %I on public.%I for select to authenticated using (public.is_member(trip_id))', t || '_select', t);
     execute format('drop policy if exists %I on public.%I', t || '_insert', t);
@@ -463,6 +523,112 @@ drop policy if exists private_notes_own on public.private_notes;
 create policy private_notes_own on public.private_notes for all to authenticated
   using (user_id = auth.uid() and public.is_member(trip_id))
   with check (user_id = auth.uid() and public.is_member(trip_id));
+
+-- ---------- 第四版：使用者（非管理者）能改的範圍 ----------
+-- 我在某一天被分到哪一組（那天沒有分組就是 null）
+create or replace function public.my_group(p_trip uuid, p_date date) returns text
+language sql stable security definer set search_path = public as $$
+  select dp.assignments ->> m.traveler_id::text
+    from public.day_plans dp
+    join public.trip_members m on m.trip_id = dp.trip_id and m.user_id = auth.uid()
+   where dp.trip_id = p_trip and dp.date = p_date and dp.mode = 'split' and dp.deleted_at is null
+     and m.traveler_id is not null
+     and (dp.assignments ->> m.traveler_id::text) = any(dp.groups)
+   limit 1
+$$;
+
+-- 使用者只能改：分組那天、只給自己那一組的行程
+create or replace function public.can_edit_group_activity(p_trip uuid, p_date date, p_groups text[], p_travelers uuid[])
+returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.is_member(p_trip)
+     and coalesce(cardinality(p_travelers), 0) = 0
+     and p_groups is not null and cardinality(p_groups) = 1
+     and p_groups[1] = public.my_group(p_trip, p_date)
+$$;
+
+-- 使用者只能改：持有人只有自己的票券
+create or replace function public.is_my_ticket(p_trip uuid, p_travelers uuid[]) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce(cardinality(p_travelers), 0) = 1 and public.is_my_traveler(p_trip, p_travelers[1])
+$$;
+
+-- 行程
+drop policy if exists activities_select on public.activities;
+create policy activities_select on public.activities for select to authenticated
+  using (public.is_member(trip_id));
+drop policy if exists activities_insert on public.activities;
+create policy activities_insert on public.activities for insert to authenticated
+  with check (public.can_edit(trip_id) or public.can_edit_group_activity(trip_id, date, audience_groups, audience_travelers));
+drop policy if exists activities_update on public.activities;
+create policy activities_update on public.activities for update to authenticated
+  using (public.can_edit(trip_id) or public.can_edit_group_activity(trip_id, date, audience_groups, audience_travelers))
+  with check (public.can_edit(trip_id) or public.can_edit_group_activity(trip_id, date, audience_groups, audience_travelers));
+drop policy if exists activities_delete on public.activities;
+create policy activities_delete on public.activities for delete to authenticated
+  using (public.can_edit(trip_id));
+
+-- 票券
+drop policy if exists tickets_select on public.tickets;
+create policy tickets_select on public.tickets for select to authenticated
+  using (public.is_member(trip_id));
+drop policy if exists tickets_insert on public.tickets;
+create policy tickets_insert on public.tickets for insert to authenticated
+  with check (public.can_edit(trip_id) or public.is_my_ticket(trip_id, traveler_ids));
+drop policy if exists tickets_update on public.tickets;
+create policy tickets_update on public.tickets for update to authenticated
+  using (public.can_edit(trip_id) or public.is_my_ticket(trip_id, traveler_ids))
+  with check (public.can_edit(trip_id) or public.is_my_ticket(trip_id, traveler_ids));
+drop policy if exists tickets_delete on public.tickets;
+create policy tickets_delete on public.tickets for delete to authenticated
+  using (public.can_edit(trip_id));
+
+-- 路線：管理者全部可改；使用者只能改分組那天自己那一組的
+drop policy if exists route_legs_select on public.route_legs;
+create policy route_legs_select on public.route_legs for select to authenticated
+  using (public.is_member(trip_id));
+drop policy if exists route_legs_insert on public.route_legs;
+create policy route_legs_insert on public.route_legs for insert to authenticated
+  with check (public.can_edit(trip_id) or (group_key <> '' and group_key = public.my_group(trip_id, date)));
+drop policy if exists route_legs_update on public.route_legs;
+create policy route_legs_update on public.route_legs for update to authenticated
+  using (public.can_edit(trip_id) or (group_key <> '' and group_key = public.my_group(trip_id, date)))
+  with check (public.can_edit(trip_id) or (group_key <> '' and group_key = public.my_group(trip_id, date)));
+drop policy if exists route_legs_delete on public.route_legs;
+create policy route_legs_delete on public.route_legs for delete to authenticated
+  using (public.can_edit(trip_id));
+
+-- 清單：自己的可以改；分享出來的大家都看得到（只能看）
+alter table public.lists enable row level security;
+alter table public.list_checks enable row level security;
+alter table public.route_legs enable row level security;
+create or replace function public.tg_lock_owner() returns trigger
+language plpgsql as $$
+begin
+  if new.owner_id is distinct from old.owner_id then raise exception '不能變更清單擁有者'; end if;
+  return new;
+end $$;
+drop trigger if exists lock_owner on public.lists;
+create trigger lock_owner before update on public.lists
+  for each row execute function public.tg_lock_owner();
+drop policy if exists lists_select on public.lists;
+create policy lists_select on public.lists for select to authenticated
+  using (public.is_member(trip_id) and (owner_id = auth.uid() or shared));
+drop policy if exists lists_insert on public.lists;
+create policy lists_insert on public.lists for insert to authenticated
+  with check (owner_id = auth.uid() and public.is_member(trip_id));
+drop policy if exists lists_update on public.lists;
+create policy lists_update on public.lists for update to authenticated
+  using (owner_id = auth.uid() and public.is_member(trip_id))
+  with check (owner_id = auth.uid() and public.is_member(trip_id));
+drop policy if exists lists_delete on public.lists;
+create policy lists_delete on public.lists for delete to authenticated
+  using (owner_id = auth.uid());
+drop policy if exists list_checks_own on public.list_checks;
+create policy list_checks_own on public.list_checks for all to authenticated
+  using (user_id = auth.uid() and public.is_member(trip_id))
+  with check (user_id = auth.uid() and public.is_member(trip_id));
+
 
 -- ---------- 函式（API）----------
 
@@ -593,11 +759,14 @@ drop policy if exists trip_files_select on storage.objects;
 create policy trip_files_select on storage.objects for select to authenticated
   using (bucket_id = 'trip-files' and public.is_member(public.try_uuid((storage.foldername(name))[1])));
 drop policy if exists trip_files_insert on storage.objects;
+-- 成員都可以上傳（使用者要上傳自己的票券）；只有管理者或上傳的人可以改、刪
 create policy trip_files_insert on storage.objects for insert to authenticated
-  with check (bucket_id = 'trip-files' and public.can_edit(public.try_uuid((storage.foldername(name))[1])));
+  with check (bucket_id = 'trip-files' and public.is_member(public.try_uuid((storage.foldername(name))[1])));
 drop policy if exists trip_files_update on storage.objects;
 create policy trip_files_update on storage.objects for update to authenticated
-  using (bucket_id = 'trip-files' and public.can_edit(public.try_uuid((storage.foldername(name))[1])));
+  using (bucket_id = 'trip-files' and (public.can_edit(public.try_uuid((storage.foldername(name))[1]))
+         or (owner_id = auth.uid()::text and public.is_member(public.try_uuid((storage.foldername(name))[1])))));
 drop policy if exists trip_files_delete on storage.objects;
 create policy trip_files_delete on storage.objects for delete to authenticated
-  using (bucket_id = 'trip-files' and public.can_edit(public.try_uuid((storage.foldername(name))[1])));
+  using (bucket_id = 'trip-files' and (public.can_edit(public.try_uuid((storage.foldername(name))[1]))
+         or (owner_id = auth.uid()::text and public.is_member(public.try_uuid((storage.foldername(name))[1])))));

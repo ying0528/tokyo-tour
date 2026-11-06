@@ -10,7 +10,7 @@ import { Icon } from '../ui/icons.tsx';
 import { SyncBadge } from '../ui/SyncBadge.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
 
-const ROLE_LABEL = { owner: '', editor: '可編輯', viewer: '只能查看' } as const;
+const ROLE_LABEL = { owner: '', editor: '管理者', viewer: '使用者' } as const;
 
 export function TripsPage() {
   useData();

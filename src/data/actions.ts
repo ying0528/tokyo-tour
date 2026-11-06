@@ -1,8 +1,10 @@
 // 儲存動作：一個操作會牽動的資料（景點、交通步驟、票券關聯）都在這裡一起處理，畫面只要呼叫一次。
-import { newActivity, newDayPlan, newPlace, newPrivateNote, newRouteStep, newTicket, newTraveler, newTrip } from './factories.ts';
+import { newActivity, newDayPlan, newLeg, newList, newListCheck, newPlace, newPrivateNote, newRouteStep, newTicket, newTraveler, newTrip } from './factories.ts';
 import type { LocalStore } from './store.ts';
-import type { Activity, ActivityKind, DayPlan, NamedLink, Place, PlaceKind, PrivateNote, RouteMode, RouteStep, Ticket, Traveler, Trip } from './types.ts';
-import { dayPlanId, stableId } from '../lib/plan.ts';
+import type { Activity, ActivityKind, DayPlan, LegStep, ListItem, NamedLink, Place, PlaceKind, PrivateNote, RouteLeg, RouteMode, RouteStep, Ticket, Traveler, Trip, TripList } from './types.ts';
+import { dayLegs, legId, stepFromLegacy } from '../lib/legs.ts';
+import type { LegView } from '../lib/legs.ts';
+import { dayPlanId, isSplit, sortActivities, stableId } from '../lib/plan.ts';
 import { safeUrl } from '../lib/links.ts';
 import { addDays, daysBetween } from '../lib/dates.ts';
 
@@ -273,6 +275,184 @@ export async function saveTicket(store: LocalStore, tripId: string, existingId: 
   return id;
 }
 
+// ---------- 清單 ----------
+
+export function listsOf(store: LocalStore, tripId: string, userId: string | null | undefined): { mine: TripList[]; shared: TripList[] } {
+  const all = store.byTrip('lists', tripId)
+    .sort((a, b) => a.sort_order - b.sort_order || (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+  return {
+    mine: all.filter((l) => l.owner_id === userId),
+    shared: all.filter((l) => l.owner_id !== userId && l.shared),
+  };
+}
+
+export async function createList(store: LocalStore, tripId: string, userId: string, title: string, icon: string): Promise<string> {
+  const t = title.trim();
+  if (!t) throw new Error('請輸入清單名稱');
+  const order = Math.max(-1, ...store.byTrip('lists', tripId).filter((l) => l.owner_id === userId).map((l) => l.sort_order)) + 1;
+  return (await store.create('lists', newList(tripId, userId, { title: t, icon, sort_order: order }))).id;
+}
+
+export async function updateList(store: LocalStore, listId: string, values: Partial<Pick<TripList, 'title' | 'icon' | 'shared'>>) {
+  if (values.title !== undefined && !values.title.trim()) throw new Error('請輸入清單名稱');
+  await store.update('lists', listId, values.title !== undefined ? { ...values, title: values.title.trim() } : values);
+}
+
+export function validateListItem(item: Pick<ListItem, 'kind' | 'text' | 'url'>): string | null {
+  if (item.kind === 'text') return item.text.trim() ? null : '請輸入文字';
+  if (!item.text.trim()) return '請輸入顯示的名字';
+  if (!item.url?.trim()) return '請貼上網址';
+  if (!safeUrl(item.url)) return '網址要是 https:// 開頭';
+  return null;
+}
+
+/** 新增或修改清單裡的一項（itemId 為 null＝新增） */
+export async function saveListItem(store: LocalStore, listId: string, itemId: string | null, item: Pick<ListItem, 'kind' | 'text' | 'url'>): Promise<string> {
+  const err = validateListItem(item);
+  if (err) throw new Error(err);
+  const list = store.get('lists', listId);
+  if (!list) throw new Error('找不到這個清單');
+  const clean: ListItem = item.kind === 'link'
+    ? { id: itemId ?? crypto.randomUUID(), kind: 'link', text: item.text.trim(), url: safeUrl(item.url ?? '') ?? '' }
+    : { id: itemId ?? crypto.randomUUID(), kind: 'text', text: item.text.trim() };
+  const items = itemId ? list.items.map((x) => (x.id === itemId ? clean : x)) : [...list.items, clean];
+  await store.update('lists', listId, { items });
+  return clean.id;
+}
+
+export async function deleteListItem(store: LocalStore, listId: string, itemId: string) {
+  const list = store.get('lists', listId);
+  if (!list) return;
+  await store.update('lists', listId, { items: list.items.filter((x) => x.id !== itemId) });
+}
+
+export async function moveListItem(store: LocalStore, listId: string, itemId: string, dir: -1 | 1) {
+  const list = store.get('lists', listId);
+  if (!list) return;
+  const items = [...list.items];
+  const i = items.findIndex((x) => x.id === itemId);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= items.length) return;
+  [items[i], items[j]] = [items[j], items[i]];
+  await store.update('lists', listId, { items });
+}
+
+export function listCheckId(userId: string, listId: string): string {
+  return stableId(`check:${userId}:${listId}`);
+}
+
+/** 我在這個清單打勾的項目（只有自己看得到） */
+export function checkedItems(store: LocalStore, listId: string, userId: string | null | undefined): Set<string> {
+  if (!userId) return new Set();
+  const c = store.get('list_checks', listCheckId(userId, listId));
+  return new Set(c && !c.deleted_at ? c.checked : []);
+}
+
+export async function toggleListCheck(store: LocalStore, tripId: string, listId: string, userId: string, itemId: string) {
+  const id = listCheckId(userId, listId);
+  const cur = store.get('list_checks', id);
+  const set = new Set(cur && !cur.deleted_at ? cur.checked : []);
+  if (set.has(itemId)) set.delete(itemId);
+  else set.add(itemId);
+  if (cur) await store.update('list_checks', id, { checked: [...set], deleted_at: null });
+  else await store.create('list_checks', newListCheck(tripId, listId, userId, id, [...set]));
+}
+
+// ---------- 路線 ----------
+
+/** 這段路線存到手機（還沒存過就建立），回傳 id */
+export async function ensureLeg(store: LocalStore, tripId: string, date: string, group: string, v: LegView): Promise<string> {
+  if (store.get('route_legs', v.id)) return v.id;
+  await store.create('route_legs', newLeg(tripId, {
+    id: v.id, date, group_key: group, from_activity_id: v.from?.id ?? null, to_activity_id: v.to?.id ?? null,
+    from_name: v.fromName, to_name: v.toName,
+  }));
+  return v.id;
+}
+
+/** 按「不需要」：先藏起來，之後可以從「新增路線」找回來 */
+export async function dismissLeg(store: LocalStore, tripId: string, date: string, group: string, v: LegView) {
+  const id = await ensureLeg(store, tripId, date, group, v);
+  await store.update('route_legs', id, { dismissed: true });
+}
+
+export async function restoreLeg(store: LocalStore, id: string) {
+  await store.update('route_legs', id, { dismissed: false, deleted_at: null });
+}
+
+/** 自己加一段（例如從飯店出發） */
+export async function addCustomLeg(store: LocalStore, tripId: string, date: string, group: string,
+  from: { activityId: string | null; name: string }, to: { activityId: string | null; name: string }): Promise<string> {
+  if (!from.activityId && !from.name.trim()) throw new Error('請選擇或輸入起點');
+  if (!to.activityId && !to.name.trim()) throw new Error('請選擇或輸入終點');
+  if (from.activityId && from.activityId === to.activityId) throw new Error('起點和終點不能一樣');
+  return (await store.create('route_legs', newLeg(tripId, {
+    date, group_key: group, custom: true,
+    from_activity_id: from.activityId, to_activity_id: to.activityId,
+    from_name: from.activityId ? '' : from.name.trim(), to_name: to.activityId ? '' : to.name.trim(),
+  }))).id;
+}
+
+export async function saveLegSteps(store: LocalStore, id: string, steps: LegStep[], notes: string) {
+  await store.update('route_legs', id, { steps, notes, dismissed: false });
+}
+
+/** 自己加的段刪掉；自動產生的段改成「不需要」 */
+export async function removeLeg(store: LocalStore, leg: RouteLeg) {
+  if (leg.custom) await store.softDelete('route_legs', leg.id);
+  else await store.update('route_legs', leg.id, { dismissed: true });
+}
+
+/** 舊版的「移動」行程數量 */
+export function legacyMoves(store: LocalStore, tripId: string): Activity[] {
+  return store.byTrip('activities', tripId).filter((a) => a.kind === 'move');
+}
+
+/**
+ * 把舊的「移動」行程轉成路線：放到它前後兩個行程之間那一段，交通步驟一起帶過去，
+ * 原本的移動行程移到回收桶（可以還原）。回傳轉換了幾筆。
+ */
+export async function convertMoves(store: LocalStore, tripId: string): Promise<number> {
+  const moves = sortActivities(legacyMoves(store, tripId));
+  const activities = store.byTrip('activities', tripId);
+  let n = 0;
+  for (const m of moves) {
+    const plan = dayPlanOf(store, tripId, m.date);
+    const group = isSplit(plan) && m.audience_groups.length === 1 && m.audience_travelers.length === 0 ? m.audience_groups[0] : '';
+    const { activities: acts } = dayLegs(tripId, m.date, group, plan, activities, []);
+    const t = m.start_time ? m.start_time.slice(0, 5) : null;
+    const before = t ? [...acts].reverse().find((a) => a.start_time && a.start_time.slice(0, 5) <= t) : undefined;
+    const after = t ? acts.find((a) => a.start_time && a.start_time.slice(0, 5) > t) : undefined;
+    const idx = before ? acts.indexOf(before) : -1;
+    const steps = liveSteps(store, m.id).map(stepFromLegacy);
+    const notes = m.notes;
+    if (before && after && acts[idx + 1] === after) {
+      const id = legId(tripId, m.date, group, before.id, after.id);
+      const cur = store.get('route_legs', id);
+      if (cur && cur.steps.length) {
+        // 這段已經設定過：另外加一段，不覆蓋
+        await store.create('route_legs', newLeg(tripId, { date: m.date, group_key: group, custom: true, from_activity_id: before.id, to_activity_id: after.id, steps, notes, start_time: m.start_time }));
+      } else if (cur) {
+        await store.update('route_legs', id, { steps, notes, dismissed: false });
+      } else {
+        await store.create('route_legs', newLeg(tripId, {
+          id, date: m.date, group_key: group, from_activity_id: before.id, to_activity_id: after.id, steps, notes,
+        }));
+      }
+    } else {
+      await store.create('route_legs', newLeg(tripId, {
+        date: m.date, group_key: group, custom: true,
+        from_activity_id: before?.id ?? null, to_activity_id: after?.id ?? null,
+        from_name: before ? '' : m.from_name || '出發地', to_name: after ? '' : m.to_name || '目的地',
+        start_time: m.start_time, steps, notes,
+      }));
+    }
+    await store.softDelete('activities', m.id);
+    n++;
+  }
+  return n;
+}
+
 // ---------- 備份、還原、複製 ----------
 
 export const BACKUP_FORMAT = 'family-trip-backup';
@@ -288,6 +468,8 @@ export interface Backup {
   route_steps: RouteStep[];
   tickets: Ticket[];
   day_plans: DayPlan[];
+  /** 第四版之後的備份才有 */
+  route_legs?: RouteLeg[];
 }
 
 export function exportTrip(store: LocalStore, tripId: string): Backup {
@@ -304,6 +486,7 @@ export function exportTrip(store: LocalStore, tripId: string): Backup {
     route_steps: store.byTrip('route_steps', tripId),
     tickets: store.byTrip('tickets', tripId),
     day_plans: store.byTrip('day_plans', tripId),
+    route_legs: store.byTrip('route_legs', tripId),
   };
 }
 
@@ -367,6 +550,19 @@ export async function copyTrip(store: LocalStore, ownerId: string, src: Backup, 
     for (const s of src.route_steps.filter((x) => !x.deleted_at && remap(x.activity_id))) {
       const { id: _i, trip_id: _t, activity_id, created_at: _c, updated_at: _u, updated_by: _b, rev: _r, deleted_at: _d, ...rest } = s;
       await store.create('route_steps', newRouteStep(trip.id, remap(activity_id)!, rest));
+    }
+    for (const l of (src.route_legs ?? []).filter((x) => !x.deleted_at)) {
+      const from = l.from_activity_id ? remap(l.from_activity_id) ?? null : null;
+      const to = l.to_activity_id ? remap(l.to_activity_id) ?? null : null;
+      if ((l.from_activity_id && !from) || (l.to_activity_id && !to)) continue;
+      const date = move(l.date);
+      const group = opts.groups ? l.group_key : '';
+      if (!opts.groups && l.group_key) continue;
+      await store.create('route_legs', newLeg(trip.id, {
+        id: !l.custom && from && to ? legId(trip.id, date, group, from, to) : crypto.randomUUID(),
+        date, group_key: group, from_activity_id: from, to_activity_id: to, from_name: l.from_name, to_name: l.to_name,
+        start_time: l.start_time, custom: l.custom, dismissed: l.dismissed, steps: l.steps, notes: l.notes,
+      }));
     }
   }
   for (const p of src.day_plans.filter((x) => !x.deleted_at)) {

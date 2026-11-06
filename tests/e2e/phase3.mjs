@@ -104,7 +104,7 @@ await page.getByRole('tab', { name: /Day 3/ }).click();
 // ---------- 類型只剩四種；不連結景點；沒有停留與費用 ----------
 await page.getByRole('button', { name: '新增行程' }).click();
 const kinds = await page.getByRole('radiogroup', { name: '行程類型' }).getByRole('radio').allInnerTexts();
-check(JSON.stringify(kinds) === JSON.stringify(['景點', '用餐', '移動', '住宿']), `類型只有景點、用餐、移動、住宿（${kinds.join('、')}）`);
+check(JSON.stringify(kinds) === JSON.stringify(['景點', '用餐', '住宿']), `類型只有景點、用餐、住宿（移動改到路線頁）（${kinds.join('、')}）`);
 check(!(await body()).includes('停留') && !(await body()).includes('費用'), '沒有停留時間與費用欄位');
 await page.getByRole('button', { name: '取消' }).click();
 
@@ -117,9 +117,6 @@ await addActivity({ kind: '景點', name: '明治神宮外苑', time: '10:00' })
 check(JSON.stringify(await titles()) === JSON.stringify(['新宿御苑', '明治神宮外苑', '澀谷 EDW yellow 咖哩蛋包飯']), '依時間自動排序');
 const sub = await page.locator('.act').filter({ hasText: 'EDW' }).locator('.act-sub').innerText();
 check(!sub.includes('http') && sub.includes('1100 開'), '卡片上不顯示連結');
-await tab('景點').click();
-check(await page.locator('.act').count() === 3, '景點分頁列出景點與用餐行程（不另外建立景點資料）');
-await tab('行程').click();
 
 // ---------- 分組：沒有「全部」 ----------
 await page.getByRole('button', { name: '這天設定' }).click();
@@ -148,20 +145,6 @@ const bar = await page.locator('.day-bar .bubble').boundingBox();
 const btn = await page.getByRole('button', { name: '分組設定' }).boundingBox();
 check(bar.x < btn.x && Math.abs((bar.y + bar.height / 2) - (btn.y + btn.height / 2)) < 20, '提醒欄在「分組設定」左邊');
 await shot('行程頁');
-
-// ---------- 移動：卡片比較扁 ----------
-await page.getByRole('button', { name: '新增行程' }).click();
-await page.getByRole('radio', { name: '移動', exact: true }).click();
-await page.getByLabel('從哪裡').fill('新宿御苑');
-await page.getByLabel('到哪裡').fill('明治神宮外苑');
-await page.getByLabel('幾點').fill('09:45');
-await page.getByLabel('路線').first().fill('JR 中央線');
-await page.getByRole('button', { name: '儲存' }).first().click();
-await page.getByRole('tab', { name: /Day 1/ }).waitFor();
-const moveH = (await page.locator('.act.flat').first().boundingBox()).height;
-const sightH = (await page.locator('.act').filter({ has: page.locator('.act-title', { hasText: /^新宿御苑$/ }) }).boundingBox()).height;
-check(moveH < sightH * 0.8, `移動卡片比較扁（${Math.round(moveH)} < ${Math.round(sightH)}）`);
-await shot('有移動的行程頁');
 
 // ---------- 詳情：沒有誰參加，地圖與連結 ----------
 await page.getByRole('button', { name: /EDW yellow/ }).click();

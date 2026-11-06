@@ -27,7 +27,7 @@ export function DayPage({ tripId, date }: { tripId: string; date: string }) {
 
   if (!trip) return <Screen header={<TopBar title="這天設定" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="找不到這趟旅行" /></Screen>;
   const ctx = tripCtx(trip, user);
-  if (!ctx.editable) return <Screen header={<TopBar title="這天設定" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="你只能查看這趟旅行" /></Screen>;
+  if (!ctx.editable) return <Screen header={<TopBar title="這天設定" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="只有管理者可以設定">分組和這天的設定由管理者負責。</Empty></Screen>;
 
   const dayN = daysBetween(trip.start_date, date) + 1;
   const used = (g: string) => store.byTrip('activities', tripId).filter((a) => a.date === date && a.audience_groups.includes(g)).length;

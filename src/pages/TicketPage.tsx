@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
-import { tripCtx } from '../app/tripContext.ts';
+import { canAddTicket, canEditTicket, tripCtx } from '../app/tripContext.ts';
 import { saveTicket } from '../data/actions.ts';
 import type { TicketDraft } from '../data/actions.ts';
 import { dayLabel, daysBetween, tripDays } from '../lib/dates.ts';
@@ -53,7 +53,7 @@ export function TicketPage({ tripId, ticketId }: { tripId: string; ticketId: str
   return (
     <Screen header={
       <TopBar title={t.title} subtitle={holders.length ? holders.join('、') : '全員共用'} left={<BackButton onClick={back} />}
-        right={ctx.editable ? <Button variant="ghost" onClick={() => navigate(`/t/${tripId}/tk/${t.id}/edit`)}>編輯</Button> : null} />
+        right={canEditTicket(ctx, t) ? <Button variant="ghost" onClick={() => navigate(`/t/${tripId}/tk/${t.id}/edit`)}>編輯</Button> : null} />
     }>
       <div className="stack">
         {t.file_type === 'image' ? (
@@ -76,7 +76,7 @@ export function TicketPage({ tripId, ticketId }: { tripId: string; ticketId: str
               <a className="btn btn-primary btn-block" href={file.url} target="_blank" rel="noopener noreferrer"><Icon.ticket /> 打開 PDF</a>
             ) : <p className="notice small">{file.state === 'loading' ? '讀取中…' : 'PDF 還沒下載到手機，連上網路後再打開一次。'}</p>
           ) : null}
-          {!t.file_path ? <p className="notice small">還沒有圖片。{ctx.editable ? '按「編輯」拍照或上傳。' : ''}</p> : null}
+          {!t.file_path ? <p className="notice small">還沒有圖片。{canEditTicket(ctx, t) ? '按「編輯」拍照或上傳。' : ''}</p> : null}
           {t.kind.trim() ? <div className="row-wrap"><span className="badge">{t.kind}</span>{t.file_size ? <span className="muted tiny">{formatSize(t.file_size)}</span> : null}</div> : null}
           {t.notes.trim() ? <div className="info-row"><Icon.note /><RichText text={t.notes} /></div> : null}
           <div className="stack-sm">
@@ -91,7 +91,7 @@ export function TicketPage({ tripId, ticketId }: { tripId: string; ticketId: str
               </button>
             )) : <p className="muted small">沒有連到行程。</p>}
           </div>
-          {ctx.editable ? <Button variant="danger" block onClick={remove}><Icon.trash /> 刪除這張票券</Button> : null}
+          {canEditTicket(ctx, t) ? <Button variant="danger" block onClick={remove}><Icon.trash /> 刪除這張票券</Button> : null}
         </div>
       </div>
     </Screen>
@@ -116,7 +116,12 @@ export function TicketForm({ tripId, ticketId, activityId }: { tripId: string; t
 
   if (!trip) return <Screen header={<TopBar title="票券" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="找不到這趟旅行" /></Screen>;
   const ctx = tripCtx(trip, user);
-  if (!ctx.editable) return <Screen header={<TopBar title="票券" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="你只能查看這趟旅行" /></Screen>;
+  const allowed = existing ? canEditTicket(ctx, existing) : canAddTicket(ctx);
+  if (!allowed) {
+    return <Screen header={<TopBar title="票券" left={<Button variant="text" onClick={close}>返回</Button>} />}>
+      <Empty title={ctx.myTravelerId ? '只能改自己的票券' : '請先選「我是誰」'}>{ctx.myTravelerId ? null : '到「旅伴・設定」選了「我是誰」之後，就可以上傳自己的票券。'}</Empty>
+    </Screen>;
+  }
 
   const days = tripDays(trip.start_date, trip.end_date);
   const acts = sortActivities(store.byTrip('activities', tripId));
@@ -145,7 +150,8 @@ export function TicketForm({ tripId, ticketId, activityId }: { tripId: string; t
   async function save() {
     setBusy(true);
     try {
-      const id = await saveTicket(store, tripId, ticketId ?? null, d);
+      // 使用者的票券持有人固定是自己
+      const id = await saveTicket(store, tripId, ticketId ?? null, ctx.editable ? d : { ...d, traveler_ids: [ctx.myTravelerId!] });
       toast(d.file && !navigator.onLine ? '已存在手機，連上網路後自動上傳' : '已儲存');
       if (ticketId) close();
       else navigate(`/t/${tripId}/tk/${id}`, { replace: true });
@@ -191,7 +197,7 @@ export function TicketForm({ tripId, ticketId, activityId }: { tripId: string; t
             ))}
           </div>
         </div>
-        <div className="field">
+        {ctx.editable ? <div className="field">
           <span className="field-label">誰的票</span>
           <div className="chips">
             <button type="button" aria-pressed={d.traveler_ids.length === 0} className={`chip${d.traveler_ids.length === 0 ? ' is-on' : ''}`}
@@ -202,7 +208,7 @@ export function TicketForm({ tripId, ticketId, activityId }: { tripId: string; t
             ))}
           </div>
           <span className="field-hint">只有持有人看得到這張票。每個人各自一張的話，分別上傳並選持有人。</span>
-        </div>
+        </div> : <p className="notice small">這張是你自己的票券，只有你看得到。</p>}
         <div className="field">
           <span className="field-label">用在哪些行程（可複選）</span>
           {acts.length ? (

@@ -86,11 +86,16 @@ insert into public.personal_status (id, trip_id, activity_id, traveler_id, done)
   values (gen_random_uuid(), :'trip', :'act', :'kid', true);
 select pg_temp.expect_error($$insert into public.personal_status (id, trip_id, activity_id, traveler_id, done) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001', 'bbbbbbbb-0000-4000-8000-000000000001', true)$$, '不能改別人的完成狀態');
 -- 檔案權限
-select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('trip-files', 'aaaaaaaa-0000-4000-8000-000000000001/x.jpg')$$, '只能看的成員不能上傳檔案');
+insert into storage.objects (bucket_id, name) values ('trip-files', 'aaaaaaaa-0000-4000-8000-000000000001/my-ticket.jpg');
+select pg_temp.expect_error($$insert into storage.objects (bucket_id, name) values ('trip-files', 'aaaaaaaa-0000-4000-8000-000000000099/x.jpg')$$, '不能上傳到別的旅行');
 reset role;
-insert into storage.objects (bucket_id, name) values ('trip-files', 'aaaaaaaa-0000-4000-8000-000000000001/ticket.jpg');
+insert into storage.objects (bucket_id, name, owner_id) values ('trip-files', 'aaaaaaaa-0000-4000-8000-000000000001/ticket.jpg', null);
 set role authenticated;
-select pg_temp.expect((select count(*) from storage.objects) = 1, '成員看得到旅行的檔案');
+select pg_temp.expect((select count(*) from storage.objects) = 2, '成員看得到旅行的檔案');
+delete from storage.objects where name like '%/ticket.jpg';
+select pg_temp.expect((select count(*) from storage.objects) = 2, '使用者不能刪別人上傳的檔案');
+delete from storage.objects where name like '%/my-ticket.jpg';
+select pg_temp.expect((select count(*) from storage.objects) = 1, '使用者可以刪自己上傳的檔案');
 
 -- ===== 私人備忘錄 =====
 reset role;
@@ -106,6 +111,49 @@ select pg_temp.expect((select note from public.private_notes limit 1) = '小寶�
 select pg_temp.expect_error($$insert into public.private_notes (id, trip_id, activity_id, user_id, note) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'x')$$, '不能替別人寫備忘錄');
 update public.activities set map_url = 'https://maps.app.goo.gl/x', links = '[{"label":"官網","url":"https://example.com"}]' where id = :'act';
 select pg_temp.expect((select count(*) from public.activities where map_url <> '') = 0, '只能看的成員不能改地圖連結');
+
+-- ===== 第四版：使用者（小寶在 12/21 被分到 B 組）=====
+insert into public.activities (id, trip_id, date, start_time, kind, title, audience_groups)
+  values ('dddddddd-0000-4000-8000-0000000000b1', :'trip', '2026-12-21', '13:00', 'food', 'B 組午餐', '{B}');
+select pg_temp.expect((select count(*) from public.activities where title = 'B 組午餐') = 1, '使用者可以新增自己那組的行程');
+update public.activities set notes = '改時間' where id = 'dddddddd-0000-4000-8000-0000000000b1';
+select pg_temp.expect((select notes from public.activities where id = 'dddddddd-0000-4000-8000-0000000000b1') = '改時間', '使用者可以改自己那組的行程');
+select pg_temp.expect_error($$update public.activities set audience_groups = '{A}' where id = 'dddddddd-0000-4000-8000-0000000000b1'$$, '使用者不能把行程改給別組');
+select pg_temp.expect_error($$insert into public.activities (id, trip_id, date, kind, title, audience_groups) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '2026-12-21', 'food', 'x', '{A}')$$, '使用者不能新增別組的行程');
+select pg_temp.expect_error($$insert into public.activities (id, trip_id, date, kind, title) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '2026-12-21', 'food', 'x')$$, '使用者不能新增全員行程');
+select pg_temp.expect_error($$insert into public.activities (id, trip_id, date, kind, title, audience_groups) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '2026-12-22', 'food', 'x', '{B}')$$, '沒有分組的日子使用者不能新增');
+update public.activities set deleted_at = now() where id = 'dddddddd-0000-4000-8000-0000000000b1';
+select pg_temp.expect((select deleted_at is not null from public.activities where id = 'dddddddd-0000-4000-8000-0000000000b1'), '使用者可以刪除自己那組的行程');
+-- 票券：只能新增、修改持有人是自己的
+insert into public.tickets (id, trip_id, title, traveler_ids) values ('ffffffff-0000-4000-8000-0000000000b1', :'trip', '我的門票', array[:'kid']::uuid[]);
+update public.tickets set notes = '我改的' where id = 'ffffffff-0000-4000-8000-0000000000b1';
+select pg_temp.expect((select notes from public.tickets where id = 'ffffffff-0000-4000-8000-0000000000b1') = '我改的', '使用者可以改自己的票券');
+select pg_temp.expect_error($$insert into public.tickets (id, trip_id, title, traveler_ids) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', 'x', array['bbbbbbbb-0000-4000-8000-000000000001']::uuid[])$$, '使用者不能新增別人的票券');
+select pg_temp.expect_error($$insert into public.tickets (id, trip_id, title) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', 'x')$$, '使用者不能新增全員共用票券');
+select pg_temp.expect_error($$update public.tickets set traveler_ids = array['bbbbbbbb-0000-4000-8000-000000000001']::uuid[] where id = 'ffffffff-0000-4000-8000-0000000000b1'$$, '使用者不能把票券改給別人');
+-- 路線：分組那天自己那組的可以改
+insert into public.route_legs (id, trip_id, date, group_key, from_name, to_name) values (gen_random_uuid(), :'trip', '2026-12-21', 'B', '飯店', '淺草寺');
+select pg_temp.expect((select count(*) from public.route_legs where group_key = 'B') = 1, '使用者可以設定自己那組的路線');
+select pg_temp.expect_error($$insert into public.route_legs (id, trip_id, date, group_key) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '2026-12-21', 'A')$$, '使用者不能設定別組的路線');
+select pg_temp.expect_error($$insert into public.route_legs (id, trip_id, date, group_key) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '2026-12-21', '')$$, '使用者不能設定全員的路線');
+-- 清單：自己的清單，分享後大家看得到
+insert into public.lists (id, trip_id, title, items) values ('99999999-0000-4000-8000-000000000001', :'trip', '想買的', '[{"id":"i1","kind":"text","text":"面膜"}]');
+insert into public.list_checks (id, trip_id, list_id, checked) values (gen_random_uuid(), :'trip', '99999999-0000-4000-8000-000000000001', '["i1"]');
+select set_config('request.jwt.claims', json_build_object('sub', :'owner')::text, false);
+select pg_temp.expect((select count(*) from public.lists) = 0, '沒分享的清單別人看不到');
+select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
+update public.lists set shared = true where id = '99999999-0000-4000-8000-000000000001';
+select set_config('request.jwt.claims', json_build_object('sub', :'owner')::text, false);
+select pg_temp.expect((select count(*) from public.lists) = 1, '分享後大家看得到');
+update public.lists set title = '偷改' where true;
+select pg_temp.expect((select title from public.lists) = '想買的', '別人不能改我的清單');
+select pg_temp.expect((select count(*) from public.list_checks) = 0, '看不到別人的打勾');
+insert into public.list_checks (id, trip_id, list_id, checked) values (gen_random_uuid(), :'trip', '99999999-0000-4000-8000-000000000001', '["i1"]');
+select pg_temp.expect((select count(*) from public.list_checks) = 1, '可以在別人分享的清單上打勾（只有自己的）');
+select pg_temp.expect_error($$insert into public.lists (id, trip_id, owner_id, title) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '22222222-2222-4222-8222-222222222222', 'x')$$, '不能替別人建立清單');
+select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
+select pg_temp.expect((select count(*) from public.list_checks) = 1, '每個人只看到自己的打勾');
+select pg_temp.expect_error($$update public.lists set owner_id = '11111111-1111-4111-8111-111111111111' where id = '99999999-0000-4000-8000-000000000001'$$, '不能把清單轉給別人');
 
 -- ===== 陌生人 =====
 select set_config('request.jwt.claims', json_build_object('sub', :'stranger')::text, false);

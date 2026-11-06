@@ -46,7 +46,7 @@ const finishPlugin = {
       writeFileSync(path.join(outdir, 'index.html'), html);
 
       cpSync(path.join(root, 'public'), outdir, { recursive: true });
-      const publicFiles = ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'icon.svg']
+      const publicFiles = ['manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png', 'icon.svg', 'data/rail-tokyo.json']
         .filter((f) => existsSync(path.join(root, 'public', f)));
       const precache = ['./', './index.html', ...outputs.filter((p) => !p.endsWith('.map')).map((p) => `./${p}`), ...publicFiles.map((f) => `./${f}`)];
       const sw = readFileSync(path.join(root, 'src', 'sw.js'), 'utf8')

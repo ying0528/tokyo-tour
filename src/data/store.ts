@@ -312,6 +312,19 @@ export class LocalStore {
     for (const t of gone) await this.removeTripLocal(t.id);
   }
 
+  /** 移除某趟旅行中伺服器上已經看不到的資料（不是自己的、也沒有待上傳的修改） */
+  async dropRowsNotIn(table: Exclude<TableName, 'trips'>, tripId: string, visible: Set<string>, myId: string | null) {
+    const map = this.rows[table] as Map<string, AnyRow>;
+    const gone = [...map.values()].filter((r) => {
+      const row = r as AnyRow & { trip_id: string; owner_id?: string };
+      return row.trip_id === tripId && row.rev > 0 && !visible.has(row.id) && row.owner_id !== myId && !this.outbox.has(`${table}:${row.id}`);
+    }).map((r) => r.id);
+    if (!gone.length) return;
+    gone.forEach((id) => map.delete(id));
+    await this.persist.deleteRows(table, gone);
+    this.emit();
+  }
+
   async removeTripLocal(tripId: string) {
     for (const table of TABLES) {
       const map = this.rows[table] as Map<string, AnyRow>;

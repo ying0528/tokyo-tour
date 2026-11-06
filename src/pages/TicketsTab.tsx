@@ -6,7 +6,7 @@ import type { TripCtx } from '../app/tripContext.ts';
 import type { Activity, Ticket } from '../data/types.ts';
 import { dayLabel, daysBetween } from '../lib/dates.ts';
 import { activityName, hhmm, sortActivities } from '../lib/plan.ts';
-import { myTickets } from '../app/tripContext.ts';
+import { canAddTicket, myTickets } from '../app/tripContext.ts';
 import { useFileUrl } from '../ui/useFile.ts';
 import { Empty } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
@@ -72,7 +72,7 @@ export function TicketsTab({ ctx }: { ctx: TripCtx }) {
     <div className="pad stack">
       <div className="section-head">
         <h2 className="day-title">票券</h2>
-        {ctx.editable ? (
+        {canAddTicket(ctx) ? (
           <button type="button" className="btn btn-ghost" onClick={() => navigate(`/t/${trip.id}/tk/new`)}><Icon.camera /> 拍照／上傳</button>
         ) : null}
       </div>
@@ -90,7 +90,7 @@ export function TicketsTab({ ctx }: { ctx: TripCtx }) {
         </div>
       )) : (
         <Empty icon={<Mascot size={70} mood="wink" />} title="還沒有你的票券">
-          {ctx.editable ? '按「拍照／上傳」加入門票、機票或 QR Code，可以一張票連到好幾個行程。' : '規劃的人上傳後，這裡就會出現。'}
+          {canAddTicket(ctx) ? '按「拍照／上傳」加入門票、機票或 QR Code，可以一張票連到好幾個行程。' : '到「旅伴・設定」選「我是誰」之後，可以上傳自己的票券。'}
         </Empty>
       )}
 

@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from 'react';
 import { canEditTrip, myMember, roleOf, store } from './services.ts';
 import type { AuthUser } from '../data/remote.ts';
-import type { DayPlan, Ticket, Traveler, Trip } from '../data/types.ts';
+import type { Activity, DayPlan, Ticket, Traveler, Trip } from '../data/types.ts';
 import { isSplit, ticketForTraveler, travelerGroup } from '../lib/plan.ts';
 import { dayPlanOf } from '../data/actions.ts';
 
@@ -80,4 +80,36 @@ export function myTickets(ctx: TripCtx): Ticket[] {
   const acts = new Map(store.byTrip('activities', ctx.trip.id).map((a) => [a.id, a]));
   const plans = new Map(store.byTrip('day_plans', ctx.trip.id).map((p) => [p.date, p]));
   return tickets.filter((t) => ticketForTraveler(t, ctx.myTravelerId!, acts, plans));
+}
+
+// ---------- 權限：管理者全部可改；使用者只能改自己那組、自己的東西 ----------
+
+/** 這天我是哪一組（沒分組或沒選身分是 null） */
+export function myGroupOn(ctx: TripCtx, date: string): string | null {
+  return travelerGroup(dayPlanOf(store, ctx.trip.id, date), ctx.myTravelerId);
+}
+
+/** 能不能在這天、這一組新增行程或設定路線 */
+export function canEditGroup(ctx: TripCtx, date: string, group: string | null): boolean {
+  if (ctx.editable) return true;
+  const g = myGroupOn(ctx, date);
+  return Boolean(g && group === g);
+}
+
+/** 能不能改這筆行程 */
+export function canEditActivity(ctx: TripCtx, a: Activity): boolean {
+  if (ctx.editable) return true;
+  const g = myGroupOn(ctx, a.date);
+  return Boolean(g && a.audience_travelers.length === 0 && a.audience_groups.length === 1 && a.audience_groups[0] === g);
+}
+
+/** 能不能改這張票券（使用者只能改持有人只有自己的） */
+export function canEditTicket(ctx: TripCtx, t: Pick<Ticket, 'traveler_ids'>): boolean {
+  if (ctx.editable) return true;
+  return Boolean(ctx.myTravelerId && t.traveler_ids.length === 1 && t.traveler_ids[0] === ctx.myTravelerId);
+}
+
+/** 能不能新增票券（使用者要先選「我是誰」） */
+export function canAddTicket(ctx: TripCtx): boolean {
+  return ctx.editable || Boolean(ctx.myTravelerId);
 }

@@ -37,6 +37,8 @@ export class Syncer {
   /** 目前正在看的旅行（只有這趟每次都抓） */
   activeTripId: () => string | null = () => null;
   isOnline: () => boolean = () => true;
+  /** 目前登入的人（判斷哪些清單是自己的） */
+  userId: () => string | null = () => null;
 
   constructor(store: LocalStore, remote: Remote) {
     this.store = store;
@@ -135,11 +137,14 @@ export class Syncer {
   async cacheFiles() {
     const tripId = this.activeTripId();
     if (!tripId) return;
-    const tickets = this.store.byTrip('tickets', tripId).filter((t) => t.file_path && !this.store.hasFile(t.file_path));
-    for (const t of tickets) {
+    const paths = [
+      ...this.store.byTrip('tickets', tripId).map((t) => t.file_path),
+      ...(this.store.get('trips', tripId)?.settings?.maps ?? []).map((m) => m.path),
+    ].filter((p): p is string => Boolean(p) && !this.store.hasFile(p));
+    for (const path of paths) {
       try {
-        const blob = await this.remote.downloadFile(t.file_path!);
-        await this.store.saveFile(t.file_path!, blob, false);
+        const blob = await this.remote.downloadFile(path);
+        await this.store.saveFile(path, blob, false);
       } catch (e) {
         if (e instanceof RemoteError && e.kind === 'network') return;
         // 檔案可能還在其他手機等待上傳，下次再試
@@ -222,6 +227,13 @@ export class Syncer {
         for (const r of rows) if (r.updated_at && (!max || r.updated_at > max)) max = r.updated_at;
       }
       if (max && max !== since) await this.store.setMeta(`cursor:${trip.id}`, max);
+      // 別人取消分享的清單：伺服器不會再傳給我，所以比對一次 id，把看不到的移除
+      try {
+        const visible = new Set(await this.remote.listIds('lists', trip.id));
+        await this.store.dropRowsNotIn('lists', trip.id, visible, this.userId());
+      } catch (e) {
+        if (e instanceof RemoteError && e.kind === 'network') throw e;
+      }
       {
         const members = await this.remote.listMembers(trip.id);
         await this.store.setMeta(`members:${trip.id}`, members);
@@ -264,4 +276,7 @@ export const TABLE_LABEL: Record<TableName, string> = {
   day_plans: '每日設定',
   personal_status: '完成狀態',
   private_notes: '備忘錄',
+  lists: '清單',
+  list_checks: '清單打勾',
+  route_legs: '路線',
 };

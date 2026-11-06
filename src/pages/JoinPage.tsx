@@ -66,7 +66,7 @@ export function JoinPage({ token }: { token: string }) {
           <p className="hero-kicker">你被邀請加入</p>
           <h1 className="hero-title">{preview.title || '未命名旅行'}</h1>
           <p className="muted">{[preview.destination, rangeLabel(preview.start_date, preview.end_date)].filter(Boolean).join('・')}</p>
-          <p className="muted small">{preview.role === 'editor' ? '加入後可以一起編輯行程' : '加入後可以查看行程（不能修改）'}</p>
+          <p className="muted small">{preview.role === 'editor' ? '加入後是「管理者」，可以一起編輯所有內容' : '加入後是「使用者」，可以看行程，並編輯分組時自己那組的行程、自己的清單、票券和備忘錄'}</p>
         </div>
 
         {preview.already_member ? <Notice>你已經是這趟旅行的成員，可以重新選擇你是誰。</Notice> : null}

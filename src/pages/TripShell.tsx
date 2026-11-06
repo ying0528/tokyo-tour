@@ -10,15 +10,17 @@ import { Icon } from '../ui/icons.tsx';
 import { Mascot } from '../ui/Mascot.tsx';
 import { SyncBadge } from '../ui/SyncBadge.tsx';
 import { PlanTab } from './PlanTab.tsx';
-import { PlacesTab } from './PlacesTab.tsx';
+import { ListsTab } from './Lists.tsx';
+import { RoutesTab } from './Routes.tsx';
 import { TicketsTab } from './TicketsTab.tsx';
 import { SettingsTab } from './SettingsTab.tsx';
 
-export type TabKey = 'plan' | 'places' | 'tickets' | 'settings';
+export type TabKey = 'plan' | 'lists' | 'routes' | 'tickets' | 'settings';
 
 const TABS: { key: TabKey; label: string; icon: () => ReactNode }[] = [
   { key: 'plan', label: '行程', icon: Icon.plan },
-  { key: 'places', label: '景點', icon: Icon.place },
+  { key: 'lists', label: '清單', icon: Icon.note },
+  { key: 'routes', label: '路線', icon: Icon.train },
   { key: 'tickets', label: '票券', icon: Icon.ticket },
   { key: 'settings', label: '旅伴・設定', icon: Icon.people },
 ];
@@ -60,7 +62,7 @@ export function TripShell({ tripId, tab, sub }: { tripId: string; tab: TabKey; s
   );
 
   const footer = (
-    <nav className="tabbar" aria-label="主要分頁">
+    <nav className="tabbar five" aria-label="主要分頁">
       {TABS.map((t) => (
         <button key={t.key} type="button" className={`tab${t.key === tab ? ' is-on' : ''}`} aria-current={t.key === tab ? 'page' : undefined}
           onClick={() => navigate(`/t/${tripId}/${t.key}`, { replace: true })}>
@@ -73,9 +75,10 @@ export function TripShell({ tripId, tab, sub }: { tripId: string; tab: TabKey; s
 
   let body: ReactNode;
   if (tab === 'plan') body = <PlanTab ctx={ctx} date={sub} />;
-  else if (tab === 'places') body = <PlacesTab ctx={ctx} />;
+  else if (tab === 'lists') body = <ListsTab ctx={ctx} />;
+  else if (tab === 'routes') body = <RoutesTab ctx={ctx} date={sub} />;
   else if (tab === 'tickets') body = <TicketsTab ctx={ctx} />;
   else body = <SettingsTab trip={trip} />;
 
-  return <Screen header={header} footer={footer} className="has-tabbar">{body}</Screen>;
+  return <Screen header={header} footer={footer} className={`has-tabbar${tab === 'routes' ? ' has-maps-btn' : ''}`}>{body}</Screen>;
 }

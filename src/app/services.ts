@@ -14,6 +14,7 @@ export const remote = backend.remote;
 
 syncer.isOnline = () => navigator.onLine !== false;
 syncer.activeTripId = () => store.getMeta<string>('active_trip') ?? null;
+syncer.userId = () => store.getMeta<AuthUser>('user')?.id ?? null;
 store.onLocalChange = () => syncer.schedule();
 
 // ---------- 登入狀態 ----------
