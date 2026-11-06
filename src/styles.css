@@ -239,7 +239,7 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .trip-card-pending { font-size: 14px; color: var(--warn); }
 
 /* ===== 每日行程 ===== */
-.day-strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px 10px; scroll-snap-type: x proximity; scrollbar-width: none; }
+.day-strip { position: sticky; top: 0; z-index: 5; background: var(--bg); display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px 10px; scroll-snap-type: x proximity; scrollbar-width: none; }
 .day-strip::-webkit-scrollbar { display: none; }
 .day-chip {
   flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; padding: 5px 12px; min-width: 96px;

@@ -174,12 +174,17 @@ export class IdbPersistence implements Persistence {
   setMeta(key: string, value: unknown) {
     return this.write('meta', (s) => { s.put(value, key); });
   }
-  putFile(key: string, blob: Blob) {
-    return this.write('files', (s) => { s.put(blob, key); });
+  // 存成 ArrayBuffer：iPhone Safari 直接存 Blob，之後重開 App 有時會讀不出來（圖片一直空白）
+  async putFile(key: string, blob: Blob) {
+    const buf = await blob.arrayBuffer();
+    return this.write('files', (s) => { s.put({ buf, type: blob.type }, key); });
   }
   async getFile(key: string): Promise<Blob | undefined> {
     const db = await this.db();
-    return (await req(db.transaction('files', 'readonly').objectStore('files').get(key))) as Blob | undefined;
+    const v = (await req(db.transaction('files', 'readonly').objectStore('files').get(key))) as Blob | { buf: ArrayBuffer; type: string } | undefined;
+    if (!v) return undefined;
+    if (v instanceof Blob) return v;
+    return new Blob([v.buf], { type: v.type });
   }
   deleteFile(key: string) {
     return this.write('files', (s) => { s.delete(key); });

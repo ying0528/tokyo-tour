@@ -37,6 +37,12 @@ export function TripShell({ tripId, tab, sub }: { tripId: string; tab: TabKey; s
     }
   }, [tripId]);
 
+  // 換分頁時回到最上面（不然會停在上一頁捲到的位置，日期列被藏起來）
+  useEffect(() => {
+    document.querySelector('.screen-body')?.scrollTo(0, 0);
+    if (window.scrollY) window.scrollTo(0, 0);
+  }, [tab]);
+
   if (!trip || trip.deleted_at) {
     const loading = !trip && sync.status === 'syncing';
     return (

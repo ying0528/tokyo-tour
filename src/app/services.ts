@@ -4,6 +4,7 @@ import { createBackend } from '../data/backend.ts';
 import { IdbPersistence } from '../data/persistence.ts';
 import { LocalStore } from '../data/store.ts';
 import { Syncer } from '../data/sync.ts';
+import { FileLoader } from '../data/fileLoader.ts';
 import type { AuthUser } from '../data/remote.ts';
 import type { Member, Role, Trip } from '../data/types.ts';
 
@@ -11,6 +12,8 @@ export const backend = createBackend();
 export const store = new LocalStore(new IdbPersistence());
 export const syncer = new Syncer(store, backend.remote);
 export const remote = backend.remote;
+export const files = new FileLoader(store, backend.remote);
+syncer.files = files;
 
 syncer.isOnline = () => navigator.onLine !== false;
 syncer.activeTripId = () => store.getMeta<string>('active_trip') ?? null;

@@ -108,6 +108,36 @@ if (file2) {
   check(!(await page.locator('body').innerText()).includes('車站地圖'), '地鐵步驟沒有車站地圖連結');
   await shot('新版-一段路線');
 }
+
+// 換分頁後日期列還在畫面上（不用下拉）
+{
+  if (await page.getByRole('button', { name: '關閉' }).count()) await page.getByRole('button', { name: '關閉' }).click();
+  if (await page.getByRole('button', { name: '返回' }).count()) await page.getByRole('button', { name: '返回' }).click();
+  await tab('行程').click();
+  await page.getByRole('tab', { name: /Day 7/ }).click();
+  await page.locator('.screen-body').evaluate((el) => el.scrollTo(0, 600));
+  await tab('清單').click();
+  await page.locator('.screen-body').evaluate((el) => el.scrollTo(0, 400));
+  await tab('行程').click();
+  await page.getByRole('tab', { name: /Day 7/ }).waitFor();
+  await page.waitForTimeout(300);
+  const box = await page.locator('.day-strip').boundingBox();
+  const head = await page.locator('.topbar').boundingBox();
+  const body = await page.locator('.screen-body').evaluate((el) => el.scrollTop);
+  check(box && head && box.y >= head.y + head.height - 1 && body === 0 && (await page.evaluate(() => window.scrollY)) === 0, `換分頁後日期列在最上面（${box?.y}, ${body}）`);
+  await tab('路線').click();
+  await page.getByRole('tab', { name: /Day 7/ }).waitFor();
+  const box2 = await page.locator('.day-strip').boundingBox();
+  check(box2 && head && box2.y >= head.y + head.height - 1, '路線頁日期列也在');
+  // 捲動時日期列固定在上面
+  await tab('行程').click();
+  await page.getByRole('tab', { name: /Day 1/ }).click();
+  await page.locator('.screen-body').evaluate((el) => el.scrollTo(0, 800));
+  await page.waitForTimeout(200);
+  const box3 = await page.locator('.day-strip').boundingBox();
+  check(box3 && head && Math.abs(box3.y - (head.y + head.height)) < 4, '往下捲時日期列固定在上方');
+  await shot('換分頁後日期列');
+}
 console.log(errors.length ? `錯誤：${errors.join('\n')}` : '沒有頁面錯誤');
 await browser.close();
 if (errors.length) process.exit(1);

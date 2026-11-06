@@ -143,7 +143,7 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
 function Thumb({ path, alt }: { path?: string; alt: string }) {
   const f = useFileUrl(path);
   const [tall, setTall] = useState(false);
-  return f.url ? <img className={`li-thumb${tall ? ' tall' : ''}`} src={f.url} alt={alt}
+  return f.url ? <img className={`li-thumb${tall ? ' tall' : ''}`} src={f.url} alt={alt} onError={f.reload}
     onLoad={(e) => { const im = e.currentTarget; setTall(im.naturalHeight > im.naturalWidth * 1.1); }} /> : <span className="li-thumb empty" aria-hidden="true">{f.state === 'loading' ? '…' : '🖼'}</span>;
 }
 
@@ -159,10 +159,10 @@ export function ListImagePage({ tripId, listId, itemId }: { tripId: string; list
         <div className={`ticket-view${zoom ? ' zoom' : ''}`} style={{ overflow: 'auto', height: '100%' }}>
           <button type="button" onClick={() => setZoom(!zoom)} aria-label={zoom ? '縮小' : '放大'}
             style={{ border: 0, padding: 0, background: 'none', cursor: zoom ? 'zoom-out' : 'zoom-in', display: 'block', width: zoom ? 'auto' : '100%' }}>
-            <img src={f.url} alt={item?.text || '清單圖片'} />
+            <img src={f.url} alt={item?.text || '清單圖片'} onError={f.reload} />
           </button>
         </div>
-      ) : <Empty title={!item ? '找不到這張圖片' : f.state === 'offline' ? '沒有網路，這張圖還沒下載到手機' : f.state === 'loading' ? '載入中…' : '圖片還在上傳中或找不到'} />}
+      ) : <Empty title={!item ? '找不到這張圖片' : f.state === 'offline' ? '網路不穩，這張圖還沒下載到手機，連上網路會自動再試' : f.state === 'loading' ? '圖片載入中…' : '這張圖還沒上傳到雲端（等新增的人打開 App 連上網路），之後會自動出現'} />}
     </Screen>
   );
 }

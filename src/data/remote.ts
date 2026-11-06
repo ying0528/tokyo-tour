@@ -23,7 +23,7 @@ export function classifyError(err: { message?: string; code?: string } | null | 
     return new RemoteError('permission', '沒有權限（使用者只能改自己的內容）');
   }
   if (code === '23503') return new RemoteError('reference', '關聯的資料已不存在');
-  if (code === 'PGRST116') return new RemoteError('not_found', '找不到資料');
+  if (code === 'PGRST116' || /object not found|not_found/i.test(message)) return new RemoteError('not_found', '找不到資料');
   return new RemoteError('other', message);
 }
 

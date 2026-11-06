@@ -1,4 +1,5 @@
 // 同步引擎：把待同步佇列上傳到雲端，再把雲端的新資料抓回手機。
+import type { FileLoader } from './fileLoader.ts';
 import { TABLES } from './types.ts';
 import type { AnyRow, OutboxEntry, TableName } from './types.ts';
 import { RemoteError } from './remote.ts';
@@ -39,6 +40,9 @@ export class Syncer {
   isOnline: () => boolean = () => true;
   /** 目前登入的人（判斷哪些清單是自己的） */
   userId: () => string | null = () => null;
+
+  /** 共用的下載器（App 裡會設定；測試沒設定就一個一個下載） */
+  files: FileLoader | null = null;
 
   constructor(store: LocalStore, remote: Remote) {
     this.store = store;
@@ -98,10 +102,11 @@ export class Syncer {
         this.set({ status: 'offline' });
         return;
       }
-      if (opts.pull !== false) await this.cacheFiles();
       // 剛上傳新旅行時也要抓一次（取得成員資料）
       if (opts.pull !== false || this.newTripUploaded) await this.pull(opts.allTrips ?? false);
       this.newTripUploaded = false;
+      // 抓完新資料再下載檔案（新手機第一次同步才知道有哪些圖片）
+      if (opts.pull !== false) await this.cacheFiles();
       const at = new Date().toISOString();
       await this.store.setMeta('last_sync', at);
       const failed = this.store.pending().some((e) => e.status === 'failed');
@@ -143,6 +148,12 @@ export class Syncer {
       ...this.store.byTrip('activities', tripId).flatMap((a) => (a.images ?? []).map((i) => i.path)),
       ...this.store.byTrip('lists', tripId).flatMap((l) => l.items.map((i) => (i.kind === 'image' ? i.path : null))),
     ].filter((p): p is string => Boolean(p) && !this.store.hasFile(p));
+    // 背景下載（排在畫面正在等的圖片後面），不必等全部抓完才繼續同步
+    const loader = this.files;
+    if (loader) {
+      for (const path of paths) void loader.download(path, 'later').catch(() => undefined);
+      return;
+    }
     for (const path of paths) {
       try {
         const blob = await this.remote.downloadFile(path);

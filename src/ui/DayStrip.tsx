@@ -10,8 +10,10 @@ export function DayStrip({ days, selected, today, onPick }: {
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const el = ref.current?.querySelector<HTMLElement>('[aria-selected="true"]');
-    el?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    // 只橫向捲動日期列（scrollIntoView 在 iPhone 會連整頁一起往下捲，日期就被推到畫面外）
+    const strip = ref.current;
+    const el = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (strip && el) strip.scrollLeft = Math.max(0, el.offsetLeft - (strip.clientWidth - el.offsetWidth) / 2);
   }, [selected]);
   return (
     <div className="day-strip" ref={ref} role="tablist" aria-label="旅行日期">

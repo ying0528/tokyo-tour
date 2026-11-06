@@ -597,10 +597,10 @@ export function MapViewPage({ tripId, mapId }: { tripId: string; mapId: string }
         <div className={`ticket-view${zoom ? ' zoom' : ''}`} style={{ overflow: 'auto', height: '100%' }}>
           <button type="button" onClick={() => setZoom(!zoom)} aria-label={zoom ? '縮小' : '放大'}
             style={{ border: 0, padding: 0, background: 'none', cursor: zoom ? 'zoom-out' : 'zoom-in', display: 'block', width: zoom ? 'auto' : '100%' }}>
-            <img src={file.url} alt={m.label} />
+            <img src={file.url} alt={m.label} onError={file.reload} />
           </button>
         </div>
-      ) : <Empty title={file.state === 'offline' ? '沒有網路，這張圖還沒下載到手機' : file.state === 'loading' ? '載入中…' : '找不到圖片'} />}
+      ) : <Empty title={file.state === 'offline' ? '網路不穩，這張圖還沒下載到手機，連上網路會自動再試' : file.state === 'loading' ? '圖片載入中…' : '這張圖還沒上傳到雲端（等新增的人打開 App 連上網路），之後會自動出現'} />}
     </Screen>
   );
 }
