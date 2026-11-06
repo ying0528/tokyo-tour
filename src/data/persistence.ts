@@ -67,7 +67,52 @@ export class MemoryPersistence implements Persistence {
 }
 
 const DB_NAME = 'family-trip';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+const STORES = [...TABLES, 'outbox', 'meta', 'files'];
+
+/**
+ * 打開手機上的資料庫。新版本加了資料表時，自動升級舊手機上的資料庫（保留原本的資料）。
+ */
+function openDb(version: number): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open(DB_NAME, version);
+    open.onupgradeneeded = () => {
+      const db = open.result;
+      for (const t of TABLES) if (!db.objectStoreNames.contains(t)) db.createObjectStore(t, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'key' });
+      if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+      if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');
+    };
+    open.onsuccess = () => {
+      const db = open.result;
+      const missing = STORES.some((n) => !db.objectStoreNames.contains(n));
+      if (!missing) {
+        db.onversionchange = () => db.close();
+        resolve(db);
+        return;
+      }
+      // 手機上的版本號比較新但少了資料表：用下一個版本號再升級一次
+      const next = db.version + 1;
+      db.close();
+      openDb(next).then(resolve, reject);
+    };
+    open.onerror = () => {
+      // 手機上的資料庫版本比程式新（例如曾經用過較新的版本）：用手機上的版本打開
+      if (open.error?.name === 'VersionError') {
+        const probe = indexedDB.open(DB_NAME);
+        probe.onsuccess = () => {
+          const v = probe.result.version;
+          probe.result.close();
+          openDb(v + 1).then(resolve, reject);
+        };
+        probe.onerror = () => reject(probe.error);
+        return;
+      }
+      reject(open.error);
+    };
+    open.onblocked = () => { console.warn('等待其他開著這個網站的分頁關閉後升級手機上的資料'); };
+  });
+}
 
 function req<T>(r: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -88,20 +133,7 @@ export class IdbPersistence implements Persistence {
   private dbp: Promise<IDBDatabase> | null = null;
 
   private db(): Promise<IDBDatabase> {
-    if (!this.dbp) {
-      this.dbp = new Promise((resolve, reject) => {
-        const open = indexedDB.open(DB_NAME, DB_VERSION);
-        open.onupgradeneeded = () => {
-          const db = open.result;
-          for (const t of TABLES) if (!db.objectStoreNames.contains(t)) db.createObjectStore(t, { keyPath: 'id' });
-          if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'key' });
-          if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
-          if (!db.objectStoreNames.contains('files')) db.createObjectStore('files');
-        };
-        open.onsuccess = () => resolve(open.result);
-        open.onerror = () => reject(open.error);
-      });
-    }
+    if (!this.dbp) this.dbp = openDb(DB_VERSION);
     return this.dbp;
   }
 
