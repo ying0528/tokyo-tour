@@ -462,3 +462,4 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .flat-leg .step-chip svg { width: 13px; height: 13px; }
 .flat-leg .line-badge { min-width: 16px; height: 16px; border-width: 2.5px; font-size: 8px; }
 .flat-leg .line-badge.sq { min-width: 20px; }
+.li-thumb { width: 52px; height: 52px; flex: 0 0 auto; border-radius: 12px; border: 2px solid var(--ink); object-fit: cover; background: var(--surface); display: grid; place-items: center; font-size: 20px; }

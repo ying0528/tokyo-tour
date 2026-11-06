@@ -135,13 +135,15 @@ export interface DayPlan extends TripContent {
   notes: string;
 }
 
-/** 清單的一項：文字或連結（擇一） */
+/** 清單的一項：文字、連結或圖片（擇一） */
 export interface ListItem {
   id: string;
-  kind: 'text' | 'link';
-  /** 文字項目的內容；連結項目顯示的名字 */
+  kind: 'text' | 'link' | 'image';
+  /** 文字項目的內容；連結項目顯示的名字；圖片的說明（可空白） */
   text: string;
   url?: string;
+  /** 圖片檔案位置（旅行 id/檔名） */
+  path?: string;
 }
 
 /** 清單：每個人自己的，可以分享給大家看 */

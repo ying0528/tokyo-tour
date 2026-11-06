@@ -17,7 +17,7 @@ import { ActivityPage } from '../pages/ActivityPage.tsx';
 import { ActivityForm } from '../pages/ActivityForm.tsx';
 import { DayPage } from '../pages/DayPage.tsx';
 import { PlaceForm, PlacePage } from '../pages/PlacePage.tsx';
-import { ListItemForm, ListPage } from '../pages/Lists.tsx';
+import { ListImagePage, ListItemForm, ListPage } from '../pages/Lists.tsx';
 import { LegForm, LegPage, MapViewPage } from '../pages/Routes.tsx';
 import { TicketForm, TicketPage } from '../pages/TicketPage.tsx';
 import { CopyTripPage } from '../pages/CopyTripPage.tsx';
@@ -65,6 +65,7 @@ function Routes() {
     if (c === 'day' && d) return <DayPage tripId={b} date={d} />;
     if (c === 'p' && d === 'new') return <PlaceForm tripId={b} />;
     if (c === 'p' && d) return e === 'edit' ? <PlaceForm tripId={b} placeId={d} /> : <PlacePage tripId={b} placeId={d} />;
+    if (c === 'l' && d && e === 'img' && route[5]) return <ListImagePage tripId={b} listId={d} itemId={route[5]} />;
     if (c === 'l' && d && e === 'i') return <ListItemForm tripId={b} listId={d} itemId={route[5] && route[5] !== 'new' ? route[5] : undefined} />;
     if (c === 'l' && d) return <ListPage tripId={b} listId={d} />;
     if (c === 'leg' && d) return e === 'edit' ? <LegForm key={d} tripId={b} legId={d} /> : <LegPage tripId={b} legId={d} />;

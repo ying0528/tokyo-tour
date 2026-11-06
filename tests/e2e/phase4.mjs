@@ -148,12 +148,18 @@ await tab('清單').click();
 await page.getByRole('button', { name: '新增清單' }).click();
 await page.getByLabel('清單名稱').fill('想買的藥妝');
 await page.getByRole('radio', { name: '💊' }).click();
-await page.getByRole('button', { name: '儲存' }).click();
+check(await page.locator('.sheet-head').getByRole('button', { name: '儲存' }).isVisible(), '新增清單的「儲存」在上方，鍵盤打開也按得到');
+await page.getByLabel('清單名稱').press('Enter');
 await page.getByRole('heading', { name: '想買的藥妝' }).waitFor();
 async function addItem(kind, text, link) {
   await page.getByRole('button', { name: '編輯' }).click();
   await page.getByRole('button', { name: '新增一項' }).click();
-  if (kind === 'link') {
+  if (kind === 'image') {
+    await page.getByRole('radio', { name: '🖼 圖片' }).click();
+    await page.getByLabel('選擇圖片').setInputFiles({ name: 'pack.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64') });
+    await page.locator('img[alt="圖片預覽"]').waitFor();
+    await page.getByLabel('說明（可不填）').fill(text);
+  } else if (kind === 'link') {
     await page.getByRole('radio', { name: '🔗 連結' }).click();
     await page.getByLabel('顯示的名字').fill(text);
     await page.getByLabel('網址').fill(link);
@@ -166,6 +172,14 @@ async function addItem(kind, text, link) {
 await addItem('text', '眼藥水（藍色那瓶）');
 await addItem('text', '面膜 2 盒');
 await addItem('link', '藥妝店優惠券', 'https://example.com/coupon');
+await addItem('image', '藍色包裝那款');
+await page.locator('img.li-thumb').waitFor();
+check(true, '可以新增圖片項目，清單裡顯示小圖');
+await page.getByRole('button', { name: /藍色包裝那款/ }).click();
+await page.locator('.ticket-view img').waitFor();
+check(true, '點小圖看大圖');
+await page.getByRole('button', { name: '返回' }).click();
+await page.getByRole('heading', { name: '想買的藥妝' }).waitFor();
 check((await page.getByRole('link', { name: /藥妝店優惠券/ }).getAttribute('href')) === 'https://example.com/coupon', '連結項目可以點開，顯示自己取的名字');
 await page.getByRole('checkbox', { name: '面膜 2 盒 買到了' }).click();
 check(await page.locator('[role=checkbox][aria-label="面膜 2 盒 買到了"][aria-checked=true]').waitFor({ timeout: 4000 }).then(() => true, () => false), '右邊框框可以打勾');

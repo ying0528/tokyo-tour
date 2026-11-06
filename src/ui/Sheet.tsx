@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Icon } from './icons.tsx';
 
-export function Sheet({ title, subtitle, onClose, children, tall, footer }: {
+export function Sheet({ title, subtitle, onClose, children, tall, footer, action }: {
   title: string;
   subtitle?: ReactNode;
   onClose: () => void;
@@ -11,6 +11,8 @@ export function Sheet({ title, subtitle, onClose, children, tall, footer }: {
   /** 幾乎滿版（例如路線圖） */
   tall?: boolean;
   footer?: ReactNode;
+  /** 標題右邊的主要按鈕（例如「儲存」），鍵盤打開時也按得到 */
+  action?: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -28,7 +30,10 @@ export function Sheet({ title, subtitle, onClose, children, tall, footer }: {
             <h2 className="sheet-title">{title}</h2>
             {subtitle ? <span className="sheet-sub">{subtitle}</span> : null}
           </div>
-          <button type="button" className="icon-btn" aria-label="關閉" onClick={onClose}><Icon.close /></button>
+          <div className="row-wrap" style={{ flexWrap: 'nowrap' }}>
+            {action}
+            <button type="button" className="icon-btn" aria-label="關閉" onClick={onClose}><Icon.close /></button>
+          </div>
         </div>
         <div className="sheet-body">{children}</div>
         {footer ? <div className="sheet-foot">{footer}</div> : null}

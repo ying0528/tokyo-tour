@@ -298,8 +298,9 @@ export async function updateList(store: LocalStore, listId: string, values: Part
   await store.update('lists', listId, values.title !== undefined ? { ...values, title: values.title.trim() } : values);
 }
 
-export function validateListItem(item: Pick<ListItem, 'kind' | 'text' | 'url'>): string | null {
+export function validateListItem(item: Pick<ListItem, 'kind' | 'text' | 'url' | 'path'>): string | null {
   if (item.kind === 'text') return item.text.trim() ? null : '請輸入文字';
+  if (item.kind === 'image') return item.path ? null : '請選一張圖片';
   if (!item.text.trim()) return '請輸入顯示的名字';
   if (!item.url?.trim()) return '請貼上網址';
   if (!safeUrl(item.url)) return '網址要是 https:// 開頭';
@@ -307,14 +308,17 @@ export function validateListItem(item: Pick<ListItem, 'kind' | 'text' | 'url'>):
 }
 
 /** 新增或修改清單裡的一項（itemId 為 null＝新增） */
-export async function saveListItem(store: LocalStore, listId: string, itemId: string | null, item: Pick<ListItem, 'kind' | 'text' | 'url'>): Promise<string> {
+export async function saveListItem(store: LocalStore, listId: string, itemId: string | null, item: Pick<ListItem, 'kind' | 'text' | 'url' | 'path'>): Promise<string> {
   const err = validateListItem(item);
   if (err) throw new Error(err);
   const list = store.get('lists', listId);
   if (!list) throw new Error('找不到這個清單');
+  const id = itemId ?? crypto.randomUUID();
   const clean: ListItem = item.kind === 'link'
-    ? { id: itemId ?? crypto.randomUUID(), kind: 'link', text: item.text.trim(), url: safeUrl(item.url ?? '') ?? '' }
-    : { id: itemId ?? crypto.randomUUID(), kind: 'text', text: item.text.trim() };
+    ? { id, kind: 'link', text: item.text.trim(), url: safeUrl(item.url ?? '') ?? '' }
+    : item.kind === 'image'
+      ? { id, kind: 'image', text: item.text.trim(), path: item.path }
+      : { id, kind: 'text', text: item.text.trim() };
   const items = itemId ? list.items.map((x) => (x.id === itemId ? clean : x)) : [...list.items, clean];
   await store.update('lists', listId, { items });
   return clean.id;

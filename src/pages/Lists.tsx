@@ -8,6 +8,8 @@ import {
 } from '../data/actions.ts';
 import type { ListItem, TripList } from '../data/types.ts';
 import { safeUrl } from '../lib/links.ts';
+import { prepareUpload } from '../lib/image.ts';
+import { useFileUrl } from '../ui/useFile.ts';
 import { BackButton, Button, Dot, Empty, Field, Screen, Segmented, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
@@ -100,10 +102,13 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
     }
   }
   return (
-    <Sheet title={title} onClose={onClose} footer={<Button variant="primary" block onClick={save}>儲存</Button>}>
-      <Field label="清單名稱" error={error}>
-        <input className="input" value={name} autoFocus placeholder="例如：想買的藥妝" onChange={(e) => { setName(e.target.value); setError(null); }} />
-      </Field>
+    <Sheet title={title} onClose={onClose}
+      action={<Button variant="primary" onClick={save} style={{ minHeight: 44, padding: '0 16px' }}>儲存</Button>}>
+      <form onSubmit={(e) => { e.preventDefault(); void save(); }}>
+        <Field label="清單名稱" error={error}>
+          <input className="input" value={name} enterKeyHint="done" placeholder="例如：想買的藥妝" onChange={(e) => { setName(e.target.value); setError(null); }} />
+        </Field>
+      </form>
       <div className="field">
         <span className="field-label">圖示</span>
         <div className="emoji-grid" role="radiogroup" aria-label="圖示">
@@ -112,7 +117,34 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
           ))}
         </div>
       </div>
+      <Button variant="primary" block onClick={save}>儲存</Button>
     </Sheet>
+  );
+}
+
+/** 清單裡的小圖 */
+function Thumb({ path, alt }: { path?: string; alt: string }) {
+  const f = useFileUrl(path);
+  return f.url ? <img className="li-thumb" src={f.url} alt={alt} /> : <span className="li-thumb empty" aria-hidden="true">{f.state === 'loading' ? '…' : '🖼'}</span>;
+}
+
+export function ListImagePage({ tripId, listId, itemId }: { tripId: string; listId: string; itemId: string }) {
+  useData();
+  const item = store.get('lists', listId)?.items.find((x) => x.id === itemId);
+  const f = useFileUrl(item?.path);
+  const [zoom, setZoom] = useState(false);
+  const close = () => goBack(`/t/${tripId}/l/${listId}`);
+  return (
+    <Screen header={<TopBar title={item?.text || '圖片'} left={<BackButton onClick={close} />} />}>
+      {f.url ? (
+        <div className={`ticket-view${zoom ? ' zoom' : ''}`} style={{ overflow: 'auto', height: '100%' }}>
+          <button type="button" onClick={() => setZoom(!zoom)} aria-label={zoom ? '縮小' : '放大'}
+            style={{ border: 0, padding: 0, background: 'none', cursor: zoom ? 'zoom-out' : 'zoom-in', display: 'block', width: zoom ? 'auto' : '100%' }}>
+            <img src={f.url} alt={item?.text || '清單圖片'} />
+          </button>
+        </div>
+      ) : <Empty title={!item ? '找不到這張圖片' : f.state === 'offline' ? '沒有網路，這張圖還沒下載到手機' : f.state === 'loading' ? '載入中…' : '圖片還在上傳中或找不到'} />}
+    </Screen>
   );
 }
 
@@ -169,10 +201,14 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
             <div key={item.id} className={`li${on ? ' done' : ''}`}>
               {url ? (
                 <a className="li-main" href={url} target="_blank" rel="noopener noreferrer"><Icon.link /><span>{item.text}</span><span className="li-ext" aria-hidden="true">↗</span></a>
+              ) : item.kind === 'image' ? (
+                <button type="button" className="li-main" onClick={() => navigate(`/t/${tripId}/l/${list.id}/img/${item.id}`)}>
+                  <Thumb path={item.path} alt={item.text || '圖片'} />{item.text ? <span>{item.text}</span> : <span className="muted">圖片</span>}
+                </button>
               ) : (
                 <span className="li-main">{item.text}</span>
               )}
-              <button type="button" className={`cb${on ? ' on' : ''}`} role="checkbox" aria-checked={on} aria-label={`${item.text} 買到了`} onClick={() => toggle(item)}>
+              <button type="button" className={`cb${on ? ' on' : ''}`} role="checkbox" aria-checked={on} aria-label={`${item.text || '圖片'} 買到了`} onClick={() => toggle(item)}>
                 {on ? <Icon.check /> : null}
               </button>
             </div>
@@ -183,21 +219,21 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
 
         {list.items.length ? (
           <p className="muted tiny center" style={{ marginTop: 4 }}>
-            {mine ? '有 🔗 的是連結，點一下打開；右邊的框框打勾＝買到了' : `在這裡打勾只有你自己看得到，不會改到${owner.name}的清單`}
+            {mine ? '有 🔗 的是連結、有小圖的點一下看大圖；右邊的框框打勾＝買到了' : `在這裡打勾只有你自己看得到，不會改到${owner.name}的清單`}
           </p>
         ) : null}
       </div>
 
       {menu ? (
         <Sheet title="要編輯哪一項？" onClose={() => setMenu(false)}
-          footer={<Button variant="primary" block onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/new`); }}><Icon.plus /> 新增一項</Button>}>
+          action={<Button variant="primary" onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/new`); }} style={{ minHeight: 44, padding: '0 14px' }}><Icon.plus /> 新增一項</Button>}>
           <button type="button" className="row-btn li" style={{ background: '#fff3dc' }} onClick={() => { setMenu(false); setRenaming(true); }}>
             <span className="li-main">清單名稱和圖示：{list.icon} {list.title}</span><Icon.edit />
           </button>
           {list.items.map((item, i) => (
             <div key={item.id} className="li">
               <button type="button" className="li-main" onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/${item.id}`); }}>
-                {item.kind === 'link' ? <Icon.link /> : null}<span>{item.text}</span>
+                {item.kind === 'link' ? <Icon.link /> : item.kind === 'image' ? <Icon.camera /> : null}<span>{item.text || '圖片'}</span>
               </button>
               <button type="button" className="icon-btn plain" aria-label="往上移" disabled={i === 0} onClick={() => moveListItem(store, list.id, item.id, -1)}><Icon.up /></button>
               <button type="button" className="icon-btn plain" aria-label="編輯" onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/${item.id}`); }}><Icon.edit /></button>
@@ -229,19 +265,50 @@ export function ListItemForm({ tripId, listId, itemId }: { tripId: string; listI
   const [kind, setKind] = useState<ListItem['kind']>(existing?.kind ?? 'text');
   const [text, setText] = useState(existing?.text ?? '');
   const [url, setUrl] = useState(existing?.url ?? '');
+  const [file, setFile] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const current = useFileUrl(kind === 'image' && !file ? existing?.path : null);
   const close = () => goBack(`/t/${tripId}/l/${listId}`);
 
   if (!list || list.owner_id !== user?.id || (itemId && !existing)) {
     return <Screen header={<TopBar title="編輯一項" left={<BackButton onClick={close} />} />}><Empty title="只能編輯自己的清單" /></Screen>;
   }
 
+  async function pick(f: File | undefined) {
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return setError('請選擇圖片');
+    setProcessing(true);
+    try {
+      const blob = await prepareUpload(f);
+      if (blob.size > 10 * 1024 * 1024) return setError('圖片太大，壓縮後仍超過 10 MB');
+      setFile(blob);
+      if (preview) URL.revokeObjectURL(preview);
+      setPreview(URL.createObjectURL(blob));
+      setError(null);
+    } finally {
+      setProcessing(false);
+    }
+  }
+
   async function save() {
-    const err = validateListItem({ kind, text, url });
+    let path = kind === 'image' ? existing?.path : undefined;
+    if (kind === 'image' && file) path = `${tripId}/list-${listId.slice(0, 8)}-${Date.now().toString(36)}.${file.type === 'image/png' ? 'png' : 'jpg'}`;
+    const err = validateListItem({ kind, text, url, path });
     if (err) return setError(err);
-    await saveListItem(store, listId, existing?.id ?? null, { kind, text, url });
-    toast('已儲存');
-    close();
+    setBusy(true);
+    try {
+      if (kind === 'image' && file && path) await store.saveFile(path, file, true);
+      await saveListItem(store, listId, existing?.id ?? null, { kind, text, url, path });
+      toast(kind === 'image' && file && !navigator.onLine ? '已存在手機，連上網路後自動上傳' : '已儲存');
+      close();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function remove() {
@@ -251,32 +318,52 @@ export function ListItemForm({ tripId, listId, itemId }: { tripId: string; listI
     close();
   }
 
+  const img = preview ?? current.url;
   return (
     <Screen header={<TopBar title={existing ? '編輯一項' : '新增一項'} left={<Button variant="text" onClick={close}>取消</Button>}
-      right={<Button variant="primary" onClick={save} style={{ minHeight: 44 }}>儲存</Button>} />}>
-      <div className="pad stack">
+      right={<Button variant="primary" busy={busy} onClick={save} style={{ minHeight: 44 }}>儲存</Button>} />}>
+      <form className="pad stack" onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <Segmented label="這一項是" value={kind} onChange={(v) => { setKind(v); setError(null); }}
-          options={[{ value: 'text', label: '文字' }, { value: 'link', label: '🔗 連結' }]} />
+          options={[{ value: 'text', label: '文字' }, { value: 'link', label: '🔗 連結' }, { value: 'image', label: '🖼 圖片' }]} />
         {kind === 'text' ? (
           <Field label="文字" error={error}>
-            <input className="input" value={text} autoFocus placeholder="例如：面膜 2 盒" onChange={(e) => { setText(e.target.value); setError(null); }} />
+            <input className="input" value={text} enterKeyHint="done" placeholder="例如：面膜 2 盒" onChange={(e) => { setText(e.target.value); setError(null); }} />
           </Field>
-        ) : (
+        ) : kind === 'link' ? (
           <>
             <Field label="顯示的名字" error={error && !text.trim() ? error : null}>
               <input className="input" value={text} placeholder="例如：藥妝店優惠券" onChange={(e) => { setText(e.target.value); setError(null); }} />
             </Field>
             <Field label="網址" error={error && text.trim() ? error : null}>
-              <input className="input" inputMode="url" value={url} placeholder="貼上網址 https://…" onChange={(e) => { setUrl(e.target.value); setError(null); }} />
+              <input className="input" inputMode="url" value={url} enterKeyHint="done" placeholder="貼上網址 https://…" onChange={(e) => { setUrl(e.target.value); setError(null); }} />
             </Field>
             <div className="stack-sm">
               <span className="field-label">清單裡會長這樣：</span>
               <div className="li"><span className="li-main"><Icon.link /><span>{text.trim() || '連結名稱'}</span><span className="li-ext">↗</span></span><span className="cb" aria-hidden="true" /></div>
             </div>
           </>
+        ) : (
+          <>
+            <div className="card stack-sm center" style={{ background: '#fff8df' }}>
+              {img ? <img src={img} alt="圖片預覽" style={{ maxHeight: 260, maxWidth: '100%', objectFit: 'contain', borderRadius: 12, border: '2px solid var(--ink)', alignSelf: 'center' }} />
+                : <span className="muted small">還沒有圖片</span>}
+              <label className="btn btn-ghost" style={{ alignSelf: 'center', position: 'relative' }}>
+                {processing ? <span className="spinner" aria-hidden="true" /> : <Icon.camera />}
+                {img ? '換一張' : '拍照或選擇圖片'}
+                <input type="file" accept="image/*" aria-label="選擇圖片" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }}
+                  style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+              </label>
+              <span className="tiny muted">例如商品照片、包裝的樣子。照片會自動縮小。</span>
+              {error ? <span className="field-error">{error}</span> : null}
+            </div>
+            <Field label="說明（可不填）">
+              <input className="input" value={text} enterKeyHint="done" placeholder="例如：藍色包裝那款" onChange={(e) => setText(e.target.value)} />
+            </Field>
+          </>
         )}
+        <Button variant="primary" block busy={busy} onClick={save}>儲存</Button>
         {existing ? <Button variant="text" className="danger" onClick={remove}>刪除這一項</Button> : null}
-      </div>
+      </form>
     </Screen>
   );
 }
