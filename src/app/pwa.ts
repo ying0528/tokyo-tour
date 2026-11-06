@@ -30,8 +30,10 @@ export function registerServiceWorker() {
     }
   });
   let reloaded = false;
+  // 第一次安裝時也會觸發 controllerchange，那時不需要重新整理（否則會清掉剛輸入的內容）
+  const hadController = Boolean(navigator.serviceWorker?.controller);
   navigator.serviceWorker?.addEventListener('controllerchange', () => {
-    if (reloaded) return;
+    if (reloaded || !hadController) return;
     reloaded = true;
     location.reload();
   });

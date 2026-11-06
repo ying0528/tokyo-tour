@@ -9,6 +9,7 @@ import { Icon } from '../ui/icons.tsx';
 import { useSyncSummary } from '../ui/SyncBadge.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
 import { RichText } from '../ui/RichText.tsx';
+import { downloadBackup } from './CopyTripPage.tsx';
 
 export function SettingsTab({ trip }: { trip: Trip }) {
   useData();
@@ -146,6 +147,15 @@ export function SettingsTab({ trip }: { trip: Trip }) {
       <Section title="同步">
         <List>
           <Row leading={<Icon.cloud />} title={sync.label} detail="查看待同步項目、立即同步" onClick={() => navigate('/sync')} />
+        </List>
+      </Section>
+
+      <Section title="備份與範本">
+        <List>
+          <Row leading={<Icon.download />} title="匯出備份" detail="把整趟旅行存成一個檔案（不含票券圖片）" onClick={() => { downloadBackup(trip.id); toast('已下載備份檔'); }} />
+          {user && !user.is_anonymous ? (
+            <Row leading={<Icon.copy />} title="複製成新旅行" detail="當作下一趟的範本，可選擇帶不帶行程" onClick={() => navigate(`/t/${trip.id}/copy`)} />
+          ) : null}
         </List>
       </Section>
 

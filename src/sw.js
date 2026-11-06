@@ -23,6 +23,22 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // 字型：存起來，離線也能顯示可愛字體
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    event.respondWith((async () => {
+      const cache = await caches.open('fonts-v1');
+      const cached = await cache.match(req);
+      if (cached) return cached;
+      try {
+        const res = await fetch(req);
+        if (res.ok || res.type === 'opaque') cache.put(req, res.clone());
+        return res;
+      } catch {
+        return Response.error();
+      }
+    })());
+    return;
+  }
   if (url.origin !== self.location.origin) return; // Supabase 等外部請求不經手
 
   // 打開頁面：先試網路（拿到最新版），3 秒內沒回應或離線就用快取

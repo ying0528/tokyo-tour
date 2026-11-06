@@ -42,7 +42,7 @@ export interface Traveler extends TripContent {
   notes: string;
 }
 
-export type PlaceKind = 'sight' | 'food' | 'lodging' | 'shop' | 'other';
+export type PlaceKind = 'sight' | 'food' | 'shop' | 'toilet' | 'lodging' | 'other';
 
 export interface Place extends TripContent {
   name: string;
@@ -54,7 +54,7 @@ export interface Place extends TripContent {
   image_path: string | null;
 }
 
-export type ActivityKind = 'sight' | 'food' | 'lodging' | 'move' | 'other';
+export type ActivityKind = PlaceKind | 'move';
 
 export interface Activity extends TripContent {
   date: ISODate;
@@ -108,6 +108,10 @@ export interface DayPlan extends TripContent {
   groups: string[];
   /** 同行者 id → 組別，例如 { "<id>": "A" } */
   assignments: Record<string, string>;
+  /** 組別 → 名稱，例如 { "A": "逛街組" } */
+  group_names: Record<string, string>;
+  /** 這天的主題，例如「澀谷・原宿」 */
+  title: string;
   notes: string;
 }
 

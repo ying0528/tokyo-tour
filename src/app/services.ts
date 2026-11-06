@@ -127,3 +127,9 @@ document.addEventListener('visibilitychange', () => {
     void syncer.sync();
   }
 });
+
+// 本機測試模式（假後端）：讓自動測試可以直接放入範例資料
+import { FAKE_BACKEND } from '../config.ts';
+import * as actions from '../data/actions.ts';
+import * as factories from '../data/factories.ts';
+if (FAKE_BACKEND) (globalThis as Record<string, unknown>).__app = { store, syncer, actions, factories };

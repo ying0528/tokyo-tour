@@ -48,7 +48,43 @@ export class LocalStore {
     this.outbox = new Map(snap.outbox.map((e) => [e.key, e]));
     this.seq = Math.max(0, ...snap.outbox.map((e) => e.seq));
     this.meta = snap.meta;
+    this.fileSet = new Set(await this.persist.fileKeys());
     this.emit();
+  }
+
+  // ---------- 檔案（票券圖片、PDF）----------
+  private fileSet = new Set<string>();
+
+  /** 這個檔案是否已存在手機上（離線可看） */
+  hasFile(path: string | null | undefined): boolean {
+    return Boolean(path && this.fileSet.has(path));
+  }
+
+  getFile(path: string): Promise<Blob | undefined> {
+    return this.persist.getFile(path);
+  }
+
+  /** 存到手機；pending = 還沒上傳到雲端 */
+  async saveFile(path: string, blob: Blob, pending: boolean) {
+    await this.persist.putFile(path, blob);
+    this.fileSet.add(path);
+    if (pending) await this.setMeta('pending_uploads', [...new Set([...this.pendingUploads(), path])]);
+    else this.emit();
+    if (pending) this.onLocalChange?.();
+  }
+
+  async forgetFile(path: string) {
+    await this.persist.deleteFile(path);
+    this.fileSet.delete(path);
+    await this.setMeta('pending_uploads', this.pendingUploads().filter((p) => p !== path));
+  }
+
+  pendingUploads(): string[] {
+    return this.getMeta<string[]>('pending_uploads') ?? [];
+  }
+
+  async markUploaded(path: string) {
+    await this.setMeta('pending_uploads', this.pendingUploads().filter((p) => p !== path));
   }
 
   subscribe = (fn: () => void) => {
@@ -309,6 +345,7 @@ export class LocalStore {
     for (const t of TABLES) (this.rows[t] as Map<string, AnyRow>).clear();
     this.outbox.clear();
     this.meta = {};
+    this.fileSet.clear();
     this.seq = 0;
     this.emit();
   }

@@ -64,6 +64,10 @@ export interface Remote {
   setMyTraveler(tripId: string, travelerId: string | null): Promise<void>;
   updateMember(tripId: string, userId: string, role: Role, seeAll: boolean, travelerId: string | null): Promise<void>;
   removeMember(tripId: string, userId: string): Promise<void>;
+  /** 票券等檔案：路徑為「旅行 id/檔名」 */
+  uploadFile(path: string, blob: Blob, contentType: string): Promise<void>;
+  downloadFile(path: string): Promise<Blob>;
+  deleteFile(path: string): Promise<void>;
 }
 
 export interface Backend {

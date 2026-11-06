@@ -6,6 +6,8 @@ import type { AuthApi, AuthUser, Backend, Remote } from './remote.ts';
 import type { AnyRow, Invite, InvitePreview, Member, Trip } from './types.ts';
 import { SUPABASE_KEY, SUPABASE_URL } from '../config.ts';
 
+const BUCKET = 'trip-files';
+
 /** 同步時多抓 2 分鐘前的資料，避免同時寫入時漏掉 */
 const PULL_OVERLAP_MS = 2 * 60 * 1000;
 
@@ -121,6 +123,15 @@ export function createBackend(): Backend {
     },
     async removeMember(tripId, userId) {
       await check(client.rpc('remove_member', { p_trip: tripId, p_user: userId }));
+    },
+    async uploadFile(path, blob, contentType) {
+      await check(client.storage.from(BUCKET).upload(path, blob, { upsert: true, contentType, cacheControl: '31536000' }));
+    },
+    async downloadFile(path) {
+      return (await check(client.storage.from(BUCKET).download(path))) as Blob;
+    },
+    async deleteFile(path) {
+      await check(client.storage.from(BUCKET).remove([path]));
     },
   };
 

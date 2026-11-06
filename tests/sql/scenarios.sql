@@ -59,6 +59,12 @@ update public.activities set notes = '舊裝置的修改' where id = :'act' and 
 select pg_temp.expect((select notes from public.activities where id = :'act') = '早點去', '舊版本號的修改不會覆蓋新資料');
 
 select pg_temp.expect_error($$update public.travelers set trip_id = gen_random_uuid() where id = 'bbbbbbbb-0000-4000-8000-000000000001'$$, '資料不能搬到別的旅行');
+insert into public.activities (id, trip_id, date, kind) values (gen_random_uuid(), :'trip', '2026-12-21', 'toilet');
+insert into public.places (id, trip_id, name, kind) values (gen_random_uuid(), :'trip', '設計廁所', 'toilet');
+select pg_temp.expect_error($$insert into public.activities (id, trip_id, date, kind) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '2026-12-21', 'xxx')$$, '不認得的類型會被擋下');
+insert into public.day_plans (id, trip_id, date, mode, title, group_names, assignments)
+  values (gen_random_uuid(), :'trip', '2026-12-21', 'split', '澀谷・原宿', '{"A":"逛街組","B":"廁所組"}', json_build_object(:'kid', 'B')::jsonb);
+select pg_temp.expect((select group_names->>'B' from public.day_plans where trip_id = :'trip') = '廁所組', '每日主題與組名可儲存');
 select pg_temp.expect_error($$insert into public.activities (id, trip_id, date, place_id) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', '2026-12-22', gen_random_uuid())$$, '行程不能連到不存在的景點');
 
 -- ===== 匿名訪客用邀請連結加入 =====
@@ -68,7 +74,7 @@ select pg_temp.expect((public.get_invite('viewer-token') ->> 'title') = '東京�
 select pg_temp.expect(jsonb_array_length(public.get_invite('viewer-token') -> 'travelers') = 2, '預覽列出同行者');
 select pg_temp.expect(public.get_invite('wrong') is null, '錯誤的邀請碼無效');
 select public.join_trip('viewer-token', :'kid');
-select pg_temp.expect((select count(*) from public.activities) = 2, '加入後看得到行程');
+select pg_temp.expect((select count(*) from public.activities) = 3, '加入後看得到行程');
 select pg_temp.expect((select traveler_id from public.trip_members where user_id = :'guest') = :'kid', '記住我是誰');
 select pg_temp.expect((select count(*) from public.trip_invites) = 0, '只能看的成員看不到邀請碼');
 update public.activities set notes = '亂改' where id = :'act';
@@ -120,6 +126,7 @@ select public.update_member(:'trip', :'guest', 'editor', true, :'kid');
 select pg_temp.expect((select role from public.trip_members where user_id = :'guest') = 'editor', '擁有者可調整權限');
 delete from public.travelers where id = :'kid';
 select pg_temp.expect((select traveler_ids from public.tickets where id = :'ticket') = '{}', '刪除同行者時移除票券持有人');
+select pg_temp.expect(not ((select assignments from public.day_plans where trip_id = :'trip') ? :'kid'), '刪除同行者時移除分組設定');
 select pg_temp.expect((select traveler_id from public.trip_members where user_id = :'guest') is null, '刪除同行者時清掉成員身分');
 select pg_temp.expect((select count(*) from public.personal_status) = 0, '刪除同行者時刪除其完成狀態');
 select public.remove_member(:'trip', :'guest');

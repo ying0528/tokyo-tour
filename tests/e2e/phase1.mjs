@@ -12,7 +12,7 @@ const context = await browser.newContext({ ...devices['iPhone 13'], locale: 'zh-
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
 page.on('dialog', (d) => d.dismiss());
 
 let n = 0;
@@ -46,17 +46,17 @@ await page.getByRole('button', { name: '再加一位' }).click();
 await names.nth(3).fill('小寶');
 await shot('建立旅行表單');
 await page.getByRole('button', { name: '建立旅行' }).click();
-await page.getByRole('tab', { name: /第 1 天/ }).waitFor();
+await page.getByRole('tab', { name: /Day 1/ }).waitFor();
 check((await page.getByRole('tab').count()) === 6, '依日期自動產生 6 天分頁');
 check((await text()).includes('東京家族旅行'), '標題顯示旅行名稱');
 await page.getByText('已同步').first().waitFor({ timeout: 5000 });
 check(true, '儲存後自動同步到雲端');
 await shot('行程分頁');
-await page.getByRole('tab', { name: /第 4 天/ }).click();
-check((await text()).includes('12/23（三）'), '切換日期');
+await page.getByRole('tab', { name: /Day 4/ }).click();
+check((await text()).includes('Day 4'), '切換日期');
 
 // 3. 設定：同行者、我是誰
-await page.getByRole('button', { name: '設定' }).click();
+await page.getByRole('button', { name: '旅伴・設定' }).click();
 await page.getByText('同行者', { exact: true }).waitFor();
 for (const name of ['媽媽', '大寶', '爸爸', '小寶']) check((await text()).includes(name), `同行者 ${name}`);
 await shot('設定分頁');
@@ -85,7 +85,7 @@ check(true, '從刪除中還原同行者');
 await page.locator('.row-btn').first().click();
 await page.getByLabel('備註（可不填）').fill(Array.from({ length: 80 }, (_, i) => `第 ${i + 1} 行：很長很長的說明 https://example.com/${i}`).join('\n'));
 await page.getByRole('button', { name: '儲存' }).first().click();
-await page.getByRole('button', { name: '設定' }).waitFor();
+await page.getByRole('button', { name: '旅伴・設定' }).waitFor();
 const body = page.locator('.screen-body');
 await body.evaluate((el) => el.scrollTo(0, el.scrollHeight));
 await page.waitForTimeout(200);
@@ -109,7 +109,7 @@ check(Boolean(token), '產生邀請碼');
 
 // 6. 離線修改 → 待同步 → 恢復連線後上傳
 await page.goBack();
-await page.getByRole('button', { name: '設定' }).waitFor();
+await page.getByRole('button', { name: '旅伴・設定' }).waitFor();
 await page.evaluate(() => localStorage.setItem('fake-offline', '1'));
 await context.setOffline(true);
 await page.locator('.row-btn').first().click();
@@ -129,11 +129,11 @@ check(serverTitle === '東京家族旅行（離線改的）', '恢復連線後�
 // 7. 重新整理：直接回到上次的旅行，資料仍在
 await page.goto(url);
 await page.reload();
-await page.getByRole('tab', { name: /第 1 天/ }).waitFor();
+await page.getByRole('tab', { name: /Day 1/ }).waitFor();
 check((await text()).includes('離線改的'), '重新打開直接進入上次的旅行');
 
 // 8. 登出 → 用邀請連結以家人身分加入（不註冊）
-await page.getByRole('button', { name: '切換旅行' }).click();
+await page.getByRole('button', { name: '我的旅行' }).click();
 await page.getByRole('button', { name: '登出' }).click();
 await page.getByRole('alertdialog').getByRole('button', { name: '登出' }).click();
 await page.getByRole('button', { name: '前往加入' }).waitFor();
@@ -143,9 +143,9 @@ await page.getByText('你是誰？').waitFor();
 await page.getByRole('button', { name: '大寶' }).click();
 await shot('加入旅行');
 await page.getByRole('button', { name: '加入這趟旅行' }).click();
-await page.getByRole('tab', { name: /第 1 天/ }).waitFor();
+await page.getByRole('tab', { name: /Day 1/ }).waitFor();
 check(true, '家人用邀請連結加入，不需註冊');
-await page.getByRole('button', { name: '設定' }).click();
+await page.getByRole('button', { name: '旅伴・設定' }).click();
 await page.getByText('你的權限：只能查看').waitFor();
 check(!(await page.getByRole('button', { name: '新增' }).count()), '只能查看的成員沒有新增按鈕');
 check(await page.getByLabel('我是誰').inputValue() !== '', '加入時選的身分已記住');

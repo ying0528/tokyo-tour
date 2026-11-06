@@ -29,6 +29,7 @@ function emptyData(): ServerData {
 export class FakeServer {
   data: ServerData;
   offline = false;
+  files = new Map<string, Blob>();
   /** 每次寫入後呼叫（瀏覽器版用來存到 localStorage） */
   onWrite: (() => void) | null = null;
 
@@ -236,6 +237,23 @@ export class FakeServer {
         m.see_all_groups = seeAll;
         m.traveler_id = travelerId;
         save();
+      },
+      async uploadFile(path, blob) {
+        s.guard();
+        const trip = path.split('/')[0];
+        if (!s.canEdit(trip, uid())) throw new RemoteError('permission', '沒有權限上傳');
+        s.files.set(path, blob);
+      },
+      async downloadFile(path) {
+        s.guard();
+        const trip = path.split('/')[0];
+        const b = s.files.get(path);
+        if (!s.role(trip, uid()) || !b) throw new RemoteError('not_found', '找不到檔案');
+        return b;
+      },
+      async deleteFile(path) {
+        s.guard();
+        s.files.delete(path);
       },
       async removeMember(tripId, userId) {
         s.guard();

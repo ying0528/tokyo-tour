@@ -130,7 +130,7 @@ create table if not exists public.places (
   id uuid primary key,
   trip_id uuid not null references public.trips(id) on delete cascade,
   name text not null default '',
-  kind text not null default 'sight' check (kind in ('sight','food','lodging','shop','other')),
+  kind text not null default 'sight',
   address text not null default '',
   map_url text not null default '',
   description text not null default '',
@@ -151,7 +151,7 @@ create table if not exists public.activities (
   date date not null,
   start_time time,
   duration_min integer check (duration_min is null or duration_min >= 0),
-  kind text not null default 'sight' check (kind in ('sight','food','lodging','move','other')),
+  kind text not null default 'sight',
   place_id uuid,
   title text not null default '',
   from_name text not null default '',
@@ -231,6 +231,18 @@ create table if not exists public.day_plans (
   rev bigint not null default 0,
   unique (trip_id, date)
 );
+
+-- ---------- 第二版補充（可重複執行）----------
+-- 類型：必去景點、好吃的、買買買、廁所、住宿、移動、其他
+alter table public.places drop constraint if exists places_kind_check;
+alter table public.places add constraint places_kind_check
+  check (kind in ('sight','food','shop','toilet','lodging','other'));
+alter table public.activities drop constraint if exists activities_kind_check;
+alter table public.activities add constraint activities_kind_check
+  check (kind in ('sight','food','shop','toilet','lodging','move','other'));
+-- 每天的主題（例如「澀谷・原宿」）與組別名稱（例如 {"A":"逛街組","B":"廁所組"}）
+alter table public.day_plans add column if not exists title text not null default '';
+alter table public.day_plans add column if not exists group_names jsonb not null default '{}'::jsonb;
 
 -- ---------- 個人狀態（可選的「已完成」）----------
 create table if not exists public.personal_status (

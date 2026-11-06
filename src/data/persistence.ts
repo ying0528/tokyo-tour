@@ -16,6 +16,10 @@ export interface Persistence {
   deleteOutbox(keys: string[]): Promise<void>;
   setMeta(key: string, value: unknown): Promise<void>;
   clearAll(): Promise<void>;
+  putFile(key: string, blob: Blob): Promise<void>;
+  getFile(key: string): Promise<Blob | undefined>;
+  deleteFile(key: string): Promise<void>;
+  fileKeys(): Promise<string[]>;
 }
 
 export function emptySnapshot(): Snapshot {
@@ -53,7 +57,13 @@ export class MemoryPersistence implements Persistence {
   }
   async clearAll() {
     this.data = emptySnapshot();
+    this.files.clear();
   }
+  files = new Map<string, Blob>();
+  async putFile(key: string, blob: Blob) { this.files.set(key, blob); }
+  async getFile(key: string) { return this.files.get(key); }
+  async deleteFile(key: string) { this.files.delete(key); }
+  async fileKeys() { return [...this.files.keys()]; }
 }
 
 const DB_NAME = 'family-trip';
@@ -131,6 +141,20 @@ export class IdbPersistence implements Persistence {
   }
   setMeta(key: string, value: unknown) {
     return this.write('meta', (s) => { s.put(value, key); });
+  }
+  putFile(key: string, blob: Blob) {
+    return this.write('files', (s) => { s.put(blob, key); });
+  }
+  async getFile(key: string): Promise<Blob | undefined> {
+    const db = await this.db();
+    return (await req(db.transaction('files', 'readonly').objectStore('files').get(key))) as Blob | undefined;
+  }
+  deleteFile(key: string) {
+    return this.write('files', (s) => { s.delete(key); });
+  }
+  async fileKeys(): Promise<string[]> {
+    const db = await this.db();
+    return ((await req(db.transaction('files', 'readonly').objectStore('files').getAllKeys())) as IDBValidKey[]).map(String);
   }
   async clearAll() {
     const db = await this.db();

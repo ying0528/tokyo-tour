@@ -3,8 +3,10 @@ import { useMemo, useState } from 'react';
 import { remote, roleOf, signOut, store, syncer, useData, useSession } from '../app/services.ts';
 import { navigate } from '../app/router.ts';
 import type { Trip } from '../data/types.ts';
-import { dayCount, rangeLabel, todayIn } from '../lib/dates.ts';
-import { Badge, Button, Empty, List, Row, Screen, Section, TopBar } from '../ui/kit.tsx';
+import { dayCount, dayLabel, daysBetween, rangeLabel, todayIn, tripDays } from '../lib/dates.ts';
+import { dayPlanOf } from '../data/actions.ts';
+import { Mascot } from '../ui/Mascot.tsx';
+import { Button, Empty, List, Row, Screen, Section, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { SyncBadge } from '../ui/SyncBadge.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
@@ -65,20 +67,42 @@ export function TripsPage() {
     if (ok) await signOut();
   }
 
-  const card = (t: Trip) => {
+  const card = (t: Trip, alt = false) => {
     const role = roleOf(t, user?.id);
     const today = todayIn(t.timezone);
     const ongoing = t.start_date <= today && today <= t.end_date;
+    const until = daysBetween(today, t.start_date);
+    const days = tripDays(t.start_date, t.end_date);
+    const travelers = store.byTrip('travelers', t.id).sort((a, b) => a.sort_order - b.sort_order);
     return (
-      <button key={t.id} type="button" className="trip-card" onClick={() => open(t)}>
+      <button key={t.id} type="button" className={`trip-card${alt ? ' alt' : ''}`} onClick={() => open(t)}>
         <span className="trip-card-top">
+          {ongoing ? <span className="pill-dark">旅行中・Day {daysBetween(t.start_date, today) + 1}</span>
+            : until > 0 ? <span className="pill-dark">還有 {until} 天出發</span> : null}
+          {role && role !== 'owner' ? <span className="badge">{ROLE_LABEL[role]}</span> : null}
+        </span>
+        <span style={{ display: 'flex', flexDirection: 'column' }}>
           <span className="trip-card-title">{t.title || '未命名旅行'}</span>
-          {ongoing ? <Badge tone="accent">旅行中</Badge> : null}
-          {role && role !== 'owner' ? <Badge>{ROLE_LABEL[role]}</Badge> : null}
+          <span className="trip-card-meta">
+            {[t.destination, rangeLabel(t.start_date, t.end_date), `${dayCount(t.start_date, t.end_date)} 天`].filter(Boolean).join('・')}
+          </span>
         </span>
-        <span className="trip-card-meta">
-          {[t.destination, rangeLabel(t.start_date, t.end_date), `${dayCount(t.start_date, t.end_date)} 天`].filter(Boolean).join('・')}
-        </span>
+        {!alt && days.length <= 14 ? (
+          <span className="trip-card-days">
+            {days.map((d, i) => (
+              <span key={d} className="trip-card-day">
+                <span className="num">Day {i + 1}</span>
+                <span className="muted">{dayLabel(d)}</span>
+                <span>{dayPlanOf(store, t.id, d)?.title ?? ''}</span>
+              </span>
+            ))}
+          </span>
+        ) : null}
+        {travelers.length ? (
+          <span className="row-wrap">
+            {travelers.slice(0, 6).map((x) => <span key={x.id} className="avatar sm" style={{ background: x.color || 'var(--surface)' }}>{x.name.slice(0, 1)}</span>)}
+          </span>
+        ) : null}
         {store.isPending('trips', t.id) ? <span className="trip-card-pending">待同步</span> : null}
       </button>
     );
@@ -90,7 +114,7 @@ export function TripsPage() {
     <Screen header={<TopBar title="我的旅行" right={<SyncBadge onClick={() => navigate('/sync')} />} />}>
       <div className="pad stack-lg">
         {upcoming.length + past.length === 0 ? (
-          <Empty icon={<Icon.sparkle />} title="還沒有旅行"
+          <Empty icon={<Mascot size={84} mood="wink" />} title="還沒有旅行"
             action={canCreate ? <Button variant="primary" onClick={() => navigate('/new')}><Icon.plus /> 建立新旅行</Button> : null}>
             {canCreate ? '建立一趟旅行，輸入名稱、日期和同行者就可以開始。' : '請向家人要邀請連結。'}
           </Empty>
@@ -99,15 +123,15 @@ export function TripsPage() {
             {canCreate ? (
               <Button variant="primary" block onClick={() => navigate('/new')}><Icon.plus /> 建立新旅行</Button>
             ) : null}
-            {upcoming.length ? <Section title="即將出發／進行中"><div className="stack">{upcoming.map(card)}</div></Section> : null}
-            {past.length ? <Section title="已結束"><div className="stack">{past.map(card)}</div></Section> : null}
+            {upcoming.length ? <Section title="即將出發／進行中"><div className="stack">{upcoming.map((t) => card(t))}</div></Section> : null}
+            {past.length ? <Section title="已結束"><div className="stack">{past.map((t) => card(t, true))}</div></Section> : null}
           </>
         )}
 
         {archived.length ? (
           <Section title={`已封存（${archived.length}）`}
             action={<button type="button" className="link-btn" onClick={() => setShowArchived(!showArchived)}>{showArchived ? '收起' : '顯示'}</button>}>
-            {showArchived ? <div className="stack">{archived.map(card)}</div> : null}
+            {showArchived ? <div className="stack">{archived.map((t) => card(t, true))}</div> : null}
           </Section>
         ) : null}
 
@@ -131,6 +155,10 @@ export function TripsPage() {
               </List>
             ) : null}
           </Section>
+        ) : null}
+
+        {canCreate ? (
+          <button type="button" className="link-btn" style={{ alignSelf: 'center' }} onClick={() => navigate('/restore')}>從備份檔還原旅行</button>
         ) : null}
 
         <Section title="帳號">

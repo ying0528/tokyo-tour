@@ -87,11 +87,16 @@ export class Syncer {
     }
     this.set({ status: 'syncing' });
     try {
+      if ((await this.uploadFiles()) === 'offline') {
+        this.set({ status: 'offline' });
+        return;
+      }
       const pushed = await this.push(opts.retryFailed ?? false);
       if (pushed === 'offline') {
         this.set({ status: 'offline' });
         return;
       }
+      if (opts.pull !== false) await this.cacheFiles();
       // 剛上傳新旅行時也要抓一次（取得成員資料）
       if (opts.pull !== false || this.newTripUploaded) await this.pull(opts.allTrips ?? false);
       this.newTripUploaded = false;
@@ -103,6 +108,42 @@ export class Syncer {
       const err = e as RemoteError;
       if (err?.kind === 'network') this.set({ status: 'offline' });
       else this.set({ status: 'error', lastError: err?.message ?? String(e) });
+    }
+  }
+
+  /** 先上傳離線時拍的票券檔案 */
+  async uploadFiles(): Promise<'ok' | 'offline'> {
+    for (const path of this.store.pendingUploads()) {
+      const blob = await this.store.getFile(path);
+      if (!blob) {
+        await this.store.markUploaded(path);
+        continue;
+      }
+      try {
+        await this.remote.uploadFile(path, blob, blob.type || 'application/octet-stream');
+        await this.store.markUploaded(path);
+      } catch (e) {
+        if (e instanceof RemoteError && e.kind === 'network') return 'offline';
+        await this.store.addNotice(`有一個票券檔案上傳失敗：${(e as Error).message}`);
+        await this.store.markUploaded(path);
+      }
+    }
+    return 'ok';
+  }
+
+  /** 把目前這趟旅行的票券檔案下載到手機，離線也能看 */
+  async cacheFiles() {
+    const tripId = this.activeTripId();
+    if (!tripId) return;
+    const tickets = this.store.byTrip('tickets', tripId).filter((t) => t.file_path && !this.store.hasFile(t.file_path));
+    for (const t of tickets) {
+      try {
+        const blob = await this.remote.downloadFile(t.file_path!);
+        await this.store.saveFile(t.file_path!, blob, false);
+      } catch (e) {
+        if (e instanceof RemoteError && e.kind === 'network') return;
+        // 檔案可能還在其他手機等待上傳，下次再試
+      }
     }
   }
 
