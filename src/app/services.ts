@@ -133,4 +133,7 @@ document.addEventListener('visibilitychange', () => {
 import { FAKE_BACKEND } from '../config.ts';
 import * as actions from '../data/actions.ts';
 import * as factories from '../data/factories.ts';
-if (FAKE_BACKEND) (globalThis as Record<string, unknown>).__app = { store, syncer, actions, factories };
+import * as legs from '../lib/legs.ts';
+import * as rail from '../lib/rail.ts';
+import * as plan from '../lib/plan.ts';
+if (FAKE_BACKEND) (globalThis as Record<string, unknown>).__app = { store, syncer, actions, factories, legs, rail, plan };
