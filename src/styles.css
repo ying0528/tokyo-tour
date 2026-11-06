@@ -484,3 +484,6 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .li.image .li-thumb.tall { height: 258px; max-width: 70%; }
 .act .kind-tag { border: 2px solid var(--ink); padding: 0 9px; }
 .act.flat .kind-tag { border-width: 1.5px; }
+/* 行程時間：不要框，只留文字 */
+.act-time { border: 0; background: none; padding-left: 0; padding-right: 0; text-align: left; min-width: 56px; }
+.act.flat .act-time { border: 0; min-width: 48px; }
