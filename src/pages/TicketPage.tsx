@@ -19,6 +19,14 @@ import { confirmDialog, toast } from '../ui/dialog.tsx';
 
 const KIND_PRESETS = ['樂園門票', '機票', '車票', '餐廳訂位', '景點門票', '其他'];
 
+/** 新票券預設是自己的（只有持有人看得到） */
+function defaultHolder(tripId: string, userId: string | undefined): string[] {
+  const trip = store.get('trips', tripId);
+  if (!trip || !userId) return [];
+  const me = tripCtx(trip, { id: userId, email: null, is_anonymous: false }).myTravelerId;
+  return me ? [me] : [];
+}
+
 export function TicketPage({ tripId, ticketId }: { tripId: string; ticketId: string }) {
   useData();
   const { user } = useSession();
@@ -97,7 +105,7 @@ export function TicketForm({ tripId, ticketId, activityId }: { tripId: string; t
   const existing = ticketId ? store.get('tickets', ticketId) : undefined;
   const [d, setD] = useState<TicketDraft>(() => existing
     ? { title: existing.title, kind: existing.kind, traveler_ids: [...existing.traveler_ids], activity_ids: [...existing.activity_ids], notes: existing.notes, file: null, fileName: '' }
-    : { title: '', kind: '', traveler_ids: [], activity_ids: activityId ? [activityId] : [], notes: '', file: null, fileName: '' });
+    : { title: '', kind: '', traveler_ids: defaultHolder(tripId, user?.id), activity_ids: activityId ? [activityId] : [], notes: '', file: null, fileName: '' });
   const [preview, setPreview] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -193,7 +201,7 @@ export function TicketForm({ tripId, ticketId, activityId }: { tripId: string; t
                 style={d.traveler_ids.includes(t.id) ? { background: 'var(--peach)' } : undefined} onClick={() => toggle('traveler_ids', t.id)}>{t.name}</button>
             ))}
           </div>
-          <span className="field-hint">每個人各自一張的話，分別上傳並選持有人，切換旅伴時就不會混在一起。</span>
+          <span className="field-hint">只有持有人看得到這張票。每個人各自一張的話，分別上傳並選持有人。</span>
         </div>
         <div className="field">
           <span className="field-label">用在哪些行程（可複選）</span>

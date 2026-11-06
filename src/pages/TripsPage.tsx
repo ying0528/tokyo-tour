@@ -3,8 +3,7 @@ import { useMemo, useState } from 'react';
 import { remote, roleOf, signOut, store, syncer, useData, useSession } from '../app/services.ts';
 import { navigate } from '../app/router.ts';
 import type { Trip } from '../data/types.ts';
-import { dayCount, dayLabel, daysBetween, rangeLabel, todayIn, tripDays } from '../lib/dates.ts';
-import { dayPlanOf } from '../data/actions.ts';
+import { dayCount, daysBetween, rangeLabel, todayIn } from '../lib/dates.ts';
 import { Mascot } from '../ui/Mascot.tsx';
 import { Button, Empty, List, Row, Screen, Section, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
@@ -72,7 +71,6 @@ export function TripsPage() {
     const today = todayIn(t.timezone);
     const ongoing = t.start_date <= today && today <= t.end_date;
     const until = daysBetween(today, t.start_date);
-    const days = tripDays(t.start_date, t.end_date);
     const travelers = store.byTrip('travelers', t.id).sort((a, b) => a.sort_order - b.sort_order);
     return (
       <button key={t.id} type="button" className={`trip-card${alt ? ' alt' : ''}`} onClick={() => open(t)}>
@@ -87,17 +85,6 @@ export function TripsPage() {
             {[t.destination, rangeLabel(t.start_date, t.end_date), `${dayCount(t.start_date, t.end_date)} 天`].filter(Boolean).join('・')}
           </span>
         </span>
-        {!alt && days.length <= 14 ? (
-          <span className="trip-card-days">
-            {days.map((d, i) => (
-              <span key={d} className="trip-card-day">
-                <span className="num">Day {i + 1}</span>
-                <span className="muted">{dayLabel(d)}</span>
-                <span>{dayPlanOf(store, t.id, d)?.title ?? ''}</span>
-              </span>
-            ))}
-          </span>
-        ) : null}
         {travelers.length ? (
           <span className="row-wrap">
             {travelers.slice(0, 6).map((x) => <span key={x.id} className="avatar sm" style={{ background: x.color || 'var(--surface)' }}>{x.name.slice(0, 1)}</span>)}

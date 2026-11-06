@@ -111,6 +111,23 @@ test('上傳成功但回應中斷：重送時不會重複建立', async () => {
   assert.equal(server.data.tables.trips[trip.id].title, '改過的名字');
 });
 
+test('私人備忘錄：別人的手機下載不到', async () => {
+  const { server, mom } = setup();
+  const a = await device(server, mom);
+  const trip = await makeTrip(a.store, mom.id);
+  const act = await a.store.create('activities', newActivity(trip.id, { date: '2026-12-21', title: '晴空塔' }));
+  await a.syncer.sync();
+  const inv = await server.remoteFor(() => a.auth.user).createInvite(trip.id, 'viewer', false);
+  const kid: AuthUser = { id: crypto.randomUUID(), email: null, is_anonymous: true };
+  const k = await device(server, kid);
+  await server.remoteFor(() => kid).joinTrip(inv.token, null);
+  await k.store.create('private_notes', { id: crypto.randomUUID(), trip_id: trip.id, activity_id: act.id, user_id: kid.id, note: '小秘密', deleted_at: null, created_at: null, updated_at: null, updated_by: null, rev: 0 });
+  await k.syncer.sync();
+  assert.equal(k.store.pending().length, 0, '只能查看的家人也能存自己的備忘錄');
+  await a.syncer.sync();
+  assert.equal(a.store.byTrip('private_notes', trip.id).length, 0, '管理者的手機看不到');
+});
+
 test('上傳順序依關聯：先景點再行程，即使行程先建立', async () => {
   const { server, mom } = setup();
   const a = await device(server, mom);

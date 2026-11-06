@@ -2,8 +2,8 @@
 import { useSyncExternalStore } from 'react';
 import { canEditTrip, myMember, roleOf, store } from './services.ts';
 import type { AuthUser } from '../data/remote.ts';
-import type { DayPlan, Traveler, Trip } from '../data/types.ts';
-import { isSplit, travelerGroup } from '../lib/plan.ts';
+import type { DayPlan, Ticket, Traveler, Trip } from '../data/types.ts';
+import { isSplit, ticketForTraveler, travelerGroup } from '../lib/plan.ts';
 import { dayPlanOf } from '../data/actions.ts';
 
 export interface TripCtx {
@@ -63,11 +63,21 @@ export function dayView(ctx: TripCtx, date: string): DayView {
   const myGroup = travelerGroup(plan, ctx.myTravelerId);
   if (!split) return { plan, split, group: null, myGroup: null, canSwitch: false };
   const key = `${ctx.trip.id}:${date}`;
-  if (!ctx.canSeeAll) {
-    // 一般旅伴：只看自己那組；還沒選身分或沒被分組就看全部
+  if (!ctx.canSeeAll && myGroup) {
+    // 一般旅伴：只看自己那組（還沒選身分或沒被分組時，可以自己切換）
     return { plan, split, group: myGroup, myGroup, canSwitch: false };
   }
   const picked = chosen.has(key) ? chosen.get(key)! : myGroup;
-  const group = picked && plan!.groups.includes(picked) ? picked : null;
+  // 分組的日子不提供「全部」：沒有選過就看自己那組，沒有組就看第一組
+  const group = picked && plan!.groups.includes(picked) ? picked : myGroup ?? plan!.groups[0];
   return { plan, split, group, myGroup, canSwitch: true };
+}
+
+/** 我看得到的票券：只看自己的（持有人是我，或全員共用且我會參加） */
+export function myTickets(ctx: TripCtx): Ticket[] {
+  const tickets = store.byTrip('tickets', ctx.trip.id);
+  if (!ctx.myTravelerId) return tickets.filter((t) => t.traveler_ids.length === 0);
+  const acts = new Map(store.byTrip('activities', ctx.trip.id).map((a) => [a.id, a]));
+  const plans = new Map(store.byTrip('day_plans', ctx.trip.id).map((p) => [p.date, p]));
+  return tickets.filter((t) => ticketForTraveler(t, ctx.myTravelerId!, acts, plans));
 }

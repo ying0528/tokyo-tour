@@ -83,6 +83,10 @@ export class FakeServer {
         if (store[row.id]) throw new RemoteError('duplicate', 'duplicate key value violates unique constraint');
         if (table === 'trips') {
           if (!user || user.is_anonymous || row.owner_id !== user.id) throw new RemoteError('permission', '沒有權限');
+        } else if (table === 'private_notes') {
+          if (!s.role(row.trip_id as string, uid())) throw new RemoteError('permission', '沒有權限');
+          row.user_id = row.user_id ?? uid();
+          if (row.user_id !== uid()) throw new RemoteError('permission', '不能替別人寫備忘錄');
         } else if (!s.canEdit(row.trip_id as string, uid())) {
           throw new RemoteError('permission', '沒有權限（可能是只能查看的成員）');
         }
@@ -107,7 +111,8 @@ export class FakeServer {
         s.guard();
         const row = s.data.tables[table][id];
         if (!row || !s.role(s.tripIdOf(table, row), uid())) return null;
-        if (!s.canEdit(s.tripIdOf(table, row), uid())) throw new RemoteError('permission', '沒有權限（可能是只能查看的成員）');
+        if (table === 'private_notes' && row.user_id !== uid()) return null;
+        if (table !== 'private_notes' && !s.canEdit(s.tripIdOf(table, row), uid())) throw new RemoteError('permission', '沒有權限（可能是只能查看的成員）');
         if (row.rev !== baseRev) return null;
         if (table === 'activities' && patch.place_id && !s.data.tables.places[patch.place_id as string]) {
           throw new RemoteError('reference', '關聯的資料已不存在');
@@ -129,6 +134,7 @@ export class FakeServer {
         s.guard();
         const row = s.data.tables[table][id];
         if (!row || !s.role(s.tripIdOf(table, row), uid())) return null;
+        if (table === 'private_notes' && row.user_id !== uid()) return null;
         return clone(row) as unknown as AnyRow;
       },
       async hardDelete(table, id) {
@@ -154,7 +160,7 @@ export class FakeServer {
         if (!s.role(tripId, uid())) return [];
         const from = since ? new Date(Date.parse(since) - 120000).toISOString() : null;
         return Object.values(s.data.tables[table])
-          .filter((r) => r.trip_id === tripId && (!from || r.updated_at > from))
+          .filter((r) => r.trip_id === tripId && (!from || r.updated_at > from) && (table !== 'private_notes' || r.user_id === uid()))
           .map(clone) as unknown as AnyRow[];
       },
       async listMembers(tripId) {

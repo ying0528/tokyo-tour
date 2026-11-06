@@ -5,7 +5,8 @@ import { navigate } from '../app/router.ts';
 import type { TripCtx } from '../app/tripContext.ts';
 import type { Activity, Ticket } from '../data/types.ts';
 import { dayLabel, daysBetween } from '../lib/dates.ts';
-import { activityName, hhmm, sortActivities, ticketForTraveler } from '../lib/plan.ts';
+import { activityName, hhmm, sortActivities } from '../lib/plan.ts';
+import { myTickets } from '../app/tripContext.ts';
 import { useFileUrl } from '../ui/useFile.ts';
 import { Empty } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
@@ -50,11 +51,12 @@ export function TicketCard({ t, ctx }: { t: Ticket; ctx: TripCtx }) {
 export function TicketsTab({ ctx }: { ctx: TripCtx }) {
   useData();
   const { trip } = ctx;
-  const [who, setWho] = useState<string | 'all'>(() => ctx.myTravelerId ?? 'all');
+  const [manage, setManage] = useState(false);
   const tickets = store.byTrip('tickets', trip.id);
-  const actMap = new Map(store.byTrip('activities', trip.id).map((a) => [a.id, a]));
-  const planMap = new Map(store.byTrip('day_plans', trip.id).map((p) => [p.date, p]));
-  const shown = who === 'all' ? tickets : tickets.filter((t) => ticketForTraveler(t, who, actMap, planMap));
+  const mine = myTickets(ctx);
+  const shown = manage ? tickets : mine;
+  const others = tickets.length - mine.length;
+  const me = ctx.travelers.find((t) => t.id === ctx.myTravelerId);
 
   // 依第一個關聯行程的日期分組
   const groups = new Map<string, Ticket[]>();
@@ -74,18 +76,9 @@ export function TicketsTab({ ctx }: { ctx: TripCtx }) {
           <button type="button" className="btn btn-ghost" onClick={() => navigate(`/t/${trip.id}/tk/new`)}><Icon.camera /> 拍照／上傳</button>
         ) : null}
       </div>
-      {ctx.travelers.length ? (
-        <div className="chips" role="radiogroup" aria-label="看誰的票券">
-          <button type="button" role="radio" aria-checked={who === 'all'} className={`chip${who === 'all' ? ' is-on' : ''}`}
-            style={who === 'all' ? { background: 'var(--butter)' } : undefined} onClick={() => setWho('all')}>全部</button>
-          {ctx.travelers.map((t) => (
-            <button key={t.id} type="button" role="radio" aria-checked={who === t.id} className={`chip${who === t.id ? ' is-on' : ''}`}
-              style={who === t.id ? { background: 'var(--peach)' } : undefined} onClick={() => setWho(t.id)}>
-              {t.name}{t.id === ctx.myTravelerId ? '（我）' : ''}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <p className="small muted">
+        {manage ? '正在管理所有人的票券' : me ? `${me.name}的票券（只顯示你自己的）` : '到「旅伴・設定」選「我是誰」，就會顯示你的票券。'}
+      </p>
       {notCached && navigator.onLine === false ? (
         <p className="notice notice-warn small">有 {notCached} 張票券還沒下載到這支手機，連上網路後打開這頁就會自動下載。</p>
       ) : null}
@@ -96,10 +89,16 @@ export function TicketsTab({ ctx }: { ctx: TripCtx }) {
           {groups.get(k)!.sort((a, b) => a.sort_order - b.sort_order).map((t) => <TicketCard key={t.id} t={t} ctx={ctx} />)}
         </div>
       )) : (
-        <Empty icon={<Mascot size={70} mood="wink" />} title={tickets.length ? '這個人沒有票券' : '還沒有票券'}>
+        <Empty icon={<Mascot size={70} mood="wink" />} title="還沒有你的票券">
           {ctx.editable ? '按「拍照／上傳」加入門票、機票或 QR Code，可以一張票連到好幾個行程。' : '規劃的人上傳後，這裡就會出現。'}
         </Empty>
       )}
+
+      {ctx.editable && (others > 0 || manage) ? (
+        <button type="button" className="link-btn" style={{ alignSelf: 'center' }} onClick={() => setManage(!manage)}>
+          {manage ? '只看我的票券' : `管理其他人的票券（${others} 張）`}
+        </button>
+      ) : null}
     </div>
   );
 }

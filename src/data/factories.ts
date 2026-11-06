@@ -1,5 +1,5 @@
 // 建立新資料時的預設值（id 由手機產生，離線也能新增）
-import type { Activity, DayPlan, Place, RouteStep, Ticket, Traveler, Trip } from './types.ts';
+import type { Activity, DayPlan, Place, PrivateNote, RouteStep, Ticket, Traveler, Trip } from './types.ts';
 
 const base = () => ({
   id: crypto.randomUUID(),
@@ -42,7 +42,7 @@ export function newActivity(tripId: string, fields: Partial<Activity> & Pick<Act
   return {
     ...base(), trip_id: tripId, start_time: null, duration_min: null, kind: 'sight', place_id: null,
     title: '', from_name: '', to_name: '', cost: null, currency: '', notes: '',
-    audience_groups: [], audience_travelers: [], ...fields,
+    audience_groups: [], audience_travelers: [], map_url: '', links: [], ...fields,
   };
 }
 
@@ -66,4 +66,8 @@ export function newTicket(tripId: string, fields: Partial<Ticket> = {}): Ticket 
     ...base(), trip_id: tripId, title: '', kind: '', file_path: null, file_type: null, file_size: null,
     traveler_ids: [], activity_ids: [], sort_order: 0, notes: '', ...fields,
   };
+}
+
+export function newPrivateNote(tripId: string, activityId: string, userId: string, id: string, note: string): PrivateNote {
+  return { ...base(), id, trip_id: tripId, activity_id: activityId, user_id: userId, note };
 }

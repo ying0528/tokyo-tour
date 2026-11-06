@@ -263,4 +263,5 @@ export const TABLE_LABEL: Record<TableName, string> = {
   tickets: '票券',
   day_plans: '每日設定',
   personal_status: '完成狀態',
+  private_notes: '備忘錄',
 };

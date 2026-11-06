@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
 import { tripCtx } from '../app/tripContext.ts';
-import { dayPlanOf, deletePlace, placeUsage, savePlace } from '../data/actions.ts';
+import { deletePlace, placeUsage, savePlace } from '../data/actions.ts';
 import type { PlaceDraft } from '../data/actions.ts';
 import type { PlaceKind } from '../data/types.ts';
 import { KINDS, mapLink, PLACE_KINDS, sortActivities } from '../lib/plan.ts';
@@ -68,7 +68,7 @@ export function PlacePage({ tripId, placeId }: { tripId: string; placeId: string
         <div className="stack-sm">
           <h2 className="section-title">排在這些行程</h2>
           {uses.length ? uses.map((a) => (
-            <ActivityCard key={a.id} a={a} plan={dayPlanOf(store, tripId, a.date)} travelers={ctx.travelers}
+            <ActivityCard key={a.id} a={a} ticketCount={0}
               showDate={`Day ${daysBetween(trip.start_date, a.date) + 1} ${dayLabel(a.date)}`}
               onClick={() => navigate(`/t/${tripId}/a/${a.id}`)} />
           )) : <p className="muted small">還沒排進行程。</p>}

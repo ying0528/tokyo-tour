@@ -92,6 +92,21 @@ insert into storage.objects (bucket_id, name) values ('trip-files', 'aaaaaaaa-00
 set role authenticated;
 select pg_temp.expect((select count(*) from storage.objects) = 1, '成員看得到旅行的檔案');
 
+-- ===== 私人備忘錄 =====
+reset role;
+set role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
+insert into public.private_notes (id, trip_id, activity_id, note) values (gen_random_uuid(), :'trip', :'act', '小寶的秘密');
+select pg_temp.expect((select count(*) from public.private_notes) = 1, '只能看的成員也能寫自己的備忘錄');
+select set_config('request.jwt.claims', json_build_object('sub', :'owner')::text, false);
+select pg_temp.expect((select count(*) from public.private_notes) = 0, '管理者也看不到別人的備忘錄');
+update public.private_notes set note = '偷改' where true;
+select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
+select pg_temp.expect((select note from public.private_notes limit 1) = '小寶的秘密', '別人改不了我的備忘錄');
+select pg_temp.expect_error($$insert into public.private_notes (id, trip_id, activity_id, user_id, note) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', 'dddddddd-0000-4000-8000-000000000001', '11111111-1111-4111-8111-111111111111', 'x')$$, '不能替別人寫備忘錄');
+update public.activities set map_url = 'https://maps.app.goo.gl/x', links = '[{"label":"官網","url":"https://example.com"}]' where id = :'act';
+select pg_temp.expect((select count(*) from public.activities where map_url <> '') = 0, '只能看的成員不能改地圖連結');
+
 -- ===== 陌生人 =====
 select set_config('request.jwt.claims', json_build_object('sub', :'stranger')::text, false);
 select pg_temp.expect((select count(*) from public.trips) = 0, '陌生人看不到旅行');

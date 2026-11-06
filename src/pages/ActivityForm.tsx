@@ -1,18 +1,16 @@
 // 新增／編輯行程。景點類自動建立或連結景點；移動類填起終點，標題自動產生，並可編輯多步交通。
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
 import { tripCtx } from '../app/tripContext.ts';
-import {
-  dayPlanOf, draftFromActivity, emptyStep, findPlaceByName, placeUsage, saveActivity, validateActivity,
-} from '../data/actions.ts';
+import { dayPlanOf, draftFromActivity, emptyStep, saveActivity, validateActivity } from '../data/actions.ts';
 import type { ActivityDraft, StepDraft } from '../data/actions.ts';
-import type { ActivityKind, RouteMode } from '../data/types.ts';
+import type { ActivityKind, NamedLink, RouteMode } from '../data/types.ts';
 import { dayLabel, daysBetween, tripDays } from '../lib/dates.ts';
-import { ACTIVITY_KINDS, groupName, isPlaceKind, isSplit, isTransit, KINDS, ROUTE_MODES } from '../lib/plan.ts';
+import { ACTIVITY_KINDS, groupName, isSplit, isTransit, KINDS, ROUTE_MODES } from '../lib/plan.ts';
 import { Button, Empty, Field, Screen, TextArea, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
-import { chooseDialog, confirmDialog, toast } from '../ui/dialog.tsx';
+import { confirmDialog, toast } from '../ui/dialog.tsx';
 
 function num(v: string): number | null {
   const t = v.trim();
@@ -88,26 +86,15 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
   const days = trip ? tripDays(trip.start_date, trip.end_date) : [];
 
   const [d, setD] = useState<ActivityDraft>(() => existing ? draftFromActivity(store, existing) : {
-    kind: 'sight', date: date && days.includes(date) ? date : days[0] ?? '', start_time: null, duration_min: null, cost: null, notes: '',
-    audience_groups: [], audience_travelers: [], name: '', placeId: null, renameMode: 'all', from_name: '', to_name: '', steps: [],
+    kind: 'sight', date: date && days.includes(date) ? date : days[0] ?? '', start_time: null, notes: '',
+    audience_groups: [], audience_travelers: [], name: '', from_name: '', to_name: '', steps: [], map_url: '', links: [],
   });
   const [error, setError] = useState<{ field: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPeople, setShowPeople] = useState(() => Boolean(existing?.audience_travelers.length));
-  const [costText, setCostText] = useState(existing?.cost != null ? String(existing.cost) : '');
 
   const set = (patch: Partial<ActivityDraft>) => { setD((x) => ({ ...x, ...patch })); setError(null); };
   const close = () => goBack(isEdit ? `/t/${tripId}/a/${activityId}` : `/t/${tripId}/plan/${d.date}`);
-
-  const places = store.byTrip('places', tripId);
-  const suggestions = useMemo(() => {
-    const q = d.name.trim().toLowerCase();
-    if (!q || !isPlaceKind(d.kind)) return [];
-    return places
-      .filter((p) => p.name.toLowerCase().includes(q) && p.id !== d.placeId)
-      .sort((a, b) => (a.kind === d.kind ? 0 : 1) - (b.kind === d.kind ? 0 : 1) || a.name.length - b.name.length)
-      .slice(0, 5);
-  }, [d.name, d.kind, d.placeId, store.version]);
 
   if (!trip || (isEdit && (!existing || existing.deleted_at))) {
     return <Screen header={<TopBar title="行程" left={<Button variant="text" onClick={close}>返回</Button>} />}><Empty title="找不到這筆行程" /></Screen>;
@@ -119,8 +106,8 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
 
   const plan = dayPlanOf(store, tripId, d.date);
   const split = isSplit(plan);
-  const linked = d.placeId ? store.get('places', d.placeId) : undefined;
-  const nameExists = !d.placeId && d.name.trim() ? findPlaceByName(store, tripId, d.name) : undefined;
+  // 舊資料可能是其他類型（買買買、廁所…），編輯時保留選項
+  const kinds: ActivityKind[] = ACTIVITY_KINDS.includes(d.kind) ? ACTIVITY_KINDS : [...ACTIVITY_KINDS, d.kind];
 
   function changeKind(k: ActivityKind) {
     set({ kind: k, steps: k === 'move' && d.steps.length === 0 ? [emptyStep()] : d.steps });
@@ -145,34 +132,14 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
     set({ steps: next });
   }
 
+  function setLink(i: number, patch: Partial<NamedLink>) {
+    set({ links: d.links.map((l, j) => (j === i ? { ...l, ...patch } : l)) });
+  }
+
   async function save() {
-    const cost = num(costText);
-    if (Number.isNaN(cost)) return setError({ field: 'cost', message: '費用請輸入數字' });
-    const draft: ActivityDraft = { ...d, cost, audience_groups: split ? d.audience_groups : d.audience_groups, steps: d.kind === 'move' ? d.steps : [] };
+    const draft: ActivityDraft = { ...d, steps: d.kind === 'move' ? d.steps : [] };
     const v = validateActivity(draft);
     if (v) return setError(v);
-
-    // 已連結的景點改了名字：問要不要一起改
-    if (isPlaceKind(draft.kind) && linked && existing?.place_id === linked.id && existing.title.trim() && existing.title.trim() === draft.name.trim()) {
-      draft.renameMode = 'this'; // 本來就是自訂名稱，沒有改
-    } else if (isPlaceKind(draft.kind) && linked && linked.name.trim() !== draft.name.trim()) {
-      const others = placeUsage(store, linked.id, activityId).length;
-      if (others > 0) {
-        const pick = await chooseDialog<'all' | 'this'>({
-          title: '名稱改了，要怎麼處理？',
-          message: <>「{linked.name}」還有 {others} 筆其他行程在用。</>,
-          choices: [
-            { value: 'all', label: `全部一起改成「${draft.name.trim()}」`, primary: true },
-            { value: 'this', label: '只改這一筆的顯示名稱' },
-          ],
-        });
-        if (!pick) return;
-        draft.renameMode = pick;
-      } else {
-        draft.renameMode = 'all';
-      }
-    }
-    // 移動改成別的類型：交通步驟會移到回收桶
     if (existing?.kind === 'move' && draft.kind !== 'move' && d.steps.some((s) => s.id)) {
       const ok = await confirmDialog({ title: '改成其他類型？', message: '這筆行程的交通步驟會一起移到回收桶。', confirmText: '確定修改' });
       if (!ok) return;
@@ -201,9 +168,9 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
     }>
       <div className="pad stack">
         <div className="field">
-          <span className="field-label">要去做什麼？</span>
-          <div className="kind-grid" role="radiogroup" aria-label="行程類型">
-            {ACTIVITY_KINDS.map((k) => (
+          <span className="field-label">類型</span>
+          <div className="kind-grid" style={{ gridTemplateColumns: `repeat(${kinds.length > 4 ? 3 : 2}, minmax(0, 1fr))` }} role="radiogroup" aria-label="行程類型">
+            {kinds.map((k) => (
               <button key={k} type="button" role="radio" aria-checked={d.kind === k} className="kind-btn"
                 style={d.kind === k ? { background: KINDS[k].bg, boxShadow: 'var(--pop)' } : undefined}
                 onClick={() => changeKind(k)}>
@@ -213,35 +180,13 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
           </div>
         </div>
 
-        {isPlaceKind(d.kind) ? (
-          <div className="field">
-            <label className="field-label" htmlFor="act-name">名稱</label>
-            <input id="act-name" className="input" value={d.name} autoComplete="off" placeholder={d.kind === 'food' ? '例如：一蘭拉麵' : '例如：明治神宮'}
+        {d.kind !== 'move' ? (
+          <Field label="名稱" error={error?.field === 'name' ? error.message : null}>
+            <input id="act-name" className="input" value={d.name} autoComplete="off"
+              placeholder={d.kind === 'food' ? '例如：一蘭拉麵' : d.kind === 'lodging' ? '例如：HOTEL METS 大森' : '例如：明治神宮'}
               onChange={(e) => set({ name: e.target.value })} />
-            {error?.field === 'name' ? <span className="field-error">{error.message}</span> : null}
-            {linked ? (
-              <span className="field-hint">
-                已連結景點「{linked.name}」
-                <button type="button" className="link-btn inline" style={{ marginLeft: 8 }} onClick={() => set({ placeId: null })}>改成新的景點</button>
-              </span>
-            ) : nameExists ? (
-              <span className="field-hint">會連到已有的景點「{nameExists.name}」</span>
-            ) : d.name.trim() ? (
-              <span className="field-hint">會自動建立「{d.name.trim()}」的景點資料，之後可以補地址和地圖</span>
-            ) : null}
-            {suggestions.length ? (
-              <div className="chips" aria-label="已有的景點">
-                {suggestions.map((p) => (
-                  <button key={p.id} type="button" className="chip" onClick={() => set({ placeId: p.id, name: p.name })}>
-                    用「{p.name}」
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {d.kind === 'move' ? (
+          </Field>
+        ) : (
           <>
             <div className="grid-2">
               <Field label="從哪裡" error={error?.field === 'from_name' ? error.message : null}>
@@ -253,7 +198,7 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
             </div>
             {routeTitle ? <p className="field-hint">標題會自動顯示「{routeTitle}」</p> : null}
           </>
-        ) : null}
+        )}
 
         <div className="grid-2">
           <div className="field">
@@ -264,19 +209,9 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
             </select>
           </div>
           <div className="field">
-            <label className="field-label" htmlFor="act-time">幾點（可不填）</label>
+            <label className="field-label" htmlFor="act-time">幾點</label>
             <input id="act-time" className="input" type="time" value={d.start_time ?? ''} onChange={(e) => set({ start_time: e.target.value || null })} />
           </div>
-        </div>
-
-        <div className="grid-2">
-          <Field label="停留幾分鐘（可不填）" error={error?.field === 'duration_min' ? error.message : null}>
-            <input id="act-dur" className="input" inputMode="numeric" value={d.duration_min ?? ''} placeholder="例如：120"
-              onChange={(e) => { const n = num(e.target.value); set({ duration_min: n === null ? null : n }); }} />
-          </Field>
-          <Field label="費用（可不填）" error={error?.field === 'cost' ? error.message : null}>
-            <input id="act-cost" className="input" inputMode="decimal" value={costText} placeholder="例如：3500" onChange={(e) => { setCostText(e.target.value); setError(null); }} />
-          </Field>
         </div>
 
         {split || d.audience_groups.length || d.audience_travelers.length ? (
@@ -306,9 +241,32 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
           </div>
         ) : null}
 
-        <Field label="補充說明（可不填，網址可以直接貼）">
+        <Field label="補充說明（可不填）">
           <TextArea value={d.notes} onChange={(v) => set({ notes: v })} placeholder="營業時間、要排隊、訂位資訊…" />
         </Field>
+
+        <Field label="地圖連結（可不填）" hint="在 Google Maps 或 Naver Map 按「分享」複製連結貼上" error={error?.field === 'map_url' ? error.message : null}>
+          <input id="act-map" className="input" inputMode="url" value={d.map_url} placeholder="https://maps.app.goo.gl/…" onChange={(e) => set({ map_url: e.target.value })} />
+        </Field>
+
+        <div className="field">
+          <span className="field-label">其他連結（可不填）</span>
+          <div className="link-list">
+            {d.links.map((l, i) => (
+              <div key={i} className="stack-sm">
+                <div className="link-row">
+                  <input className="input" aria-label={`連結 ${i + 1} 名稱`} value={l.label} placeholder="名稱，例如：官網" onChange={(e) => setLink(i, { label: e.target.value })} />
+                  <input className="input" aria-label={`連結 ${i + 1} 網址`} inputMode="url" value={l.url} placeholder="https://…" onChange={(e) => setLink(i, { url: e.target.value })} />
+                  <button type="button" className="icon-btn plain" aria-label={`刪除連結 ${i + 1}`} onClick={() => set({ links: d.links.filter((_, j) => j !== i) })}><Icon.close /></button>
+                </div>
+                {error?.field === `link-${i}` ? <span className="field-error">{error.message}</span> : null}
+              </div>
+            ))}
+            <Button variant="secondary" onClick={() => set({ links: [...d.links, { label: '', url: '' }] })} style={{ borderStyle: 'dashed', alignSelf: 'flex-start' }}>
+              <Icon.plus /> 新增連結
+            </Button>
+          </div>
+        </div>
 
         {d.kind === 'move' ? (
           <div className="stack">

@@ -70,6 +70,22 @@ export interface Activity extends TripContent {
   notes: string;
   audience_groups: string[];
   audience_travelers: string[];
+  /** 地圖連結（Google Maps、Naver Map 都可以） */
+  map_url: string;
+  /** 其他連結，可自己命名 */
+  links: NamedLink[];
+}
+
+export interface NamedLink {
+  label: string;
+  url: string;
+}
+
+/** 私人備忘錄：只有寫的人自己看得到 */
+export interface PrivateNote extends TripContent {
+  activity_id: string;
+  user_id: string;
+  note: string;
 }
 
 export type RouteMode = 'subway' | 'bus' | 'walk' | 'uber' | 'taxi' | 'train' | 'other';
@@ -132,6 +148,7 @@ export const TABLES = [
   'tickets',
   'day_plans',
   'personal_status',
+  'private_notes',
 ] as const;
 
 export type TableName = (typeof TABLES)[number];
@@ -145,6 +162,7 @@ export interface RowMap {
   tickets: Ticket;
   day_plans: DayPlan;
   personal_status: PersonalStatus;
+  private_notes: PrivateNote;
 }
 
 export type AnyRow = RowMap[TableName];

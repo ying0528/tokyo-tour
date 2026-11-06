@@ -1,14 +1,15 @@
 // 行程詳情：標題列固定（返回、編輯），只有內容捲動；景點資訊、地圖、交通步驟、票券都在這裡
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
-import { tripCtx } from '../app/tripContext.ts';
-import { deleteActivity, dayPlanOf, liveSteps, restoreActivity } from '../data/actions.ts';
+import { myTickets, tripCtx } from '../app/tripContext.ts';
+import { deleteActivity, getPrivateNote, linkLabel, liveSteps, restoreActivity, savePrivateNote } from '../data/actions.ts';
 import type { RouteStep } from '../data/types.ts';
 import { dayLabel, daysBetween } from '../lib/dates.ts';
-import { activityName, audienceLabel, endTime, hhmm, isTransit, KINDS, mapLink, modeLabel, ticketForTraveler } from '../lib/plan.ts';
+import { activityName, hhmm, isTransit, KINDS, modeLabel } from '../lib/plan.ts';
 import { safeUrl } from '../lib/links.ts';
-import { BackButton, Button, Empty, Screen, TopBar } from '../ui/kit.tsx';
+import { BackButton, Button, Empty, Screen, TextArea, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { Mascot } from '../ui/Mascot.tsx';
 import { RichText } from '../ui/RichText.tsx';
@@ -51,6 +52,36 @@ export function StepView({ s }: { s: RouteStep }) {
   );
 }
 
+function PrivateMemo({ tripId, activityId, userId }: { tripId: string; activityId: string; userId: string }) {
+  const saved = getPrivateNote(store, activityId, userId)?.note ?? '';
+  const [text, setText] = useState(saved);
+  const [busy, setBusy] = useState(false);
+  const dirty = text !== saved;
+  useEffect(() => { setText(saved); }, [activityId]);
+
+  async function save() {
+    if (!dirty) return;
+    setBusy(true);
+    try {
+      await savePrivateNote(store, tripId, activityId, userId, text);
+      toast('備忘錄已儲存');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card stack-sm" style={{ background: '#fff8df' }}>
+      <div className="section-head">
+        <h2 className="section-title">我的備忘錄</h2>
+        <span className="tiny muted">只有你自己看得到</span>
+      </div>
+      <TextArea value={text} onChange={setText} minRows={2} placeholder="想買的東西、想拍的照片、提醒自己的事…" />
+      {dirty ? <Button variant="primary" busy={busy} onClick={save} style={{ alignSelf: 'flex-end', minHeight: 42 }}>儲存備忘錄</Button> : null}
+    </div>
+  );
+}
+
 export function ActivityPage({ tripId, activityId }: { tripId: string; activityId: string }) {
   useData();
   const { user } = useSession();
@@ -68,28 +99,17 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
 
   const ctx = tripCtx(trip, user);
   const kind = KINDS[a.kind];
-  const place = store.get('places', a.place_id);
-  const livePlace = place && !place.deleted_at ? place : undefined;
-  const name = activityName(a, place);
-  const plan = dayPlanOf(store, tripId, a.date);
-  const aud = audienceLabel(a, plan, ctx.travelers) || '所有人';
-  const end = endTime(a);
+  const name = activityName(a, store.get('places', a.place_id));
   const steps = a.kind === 'move' ? liveSteps(store, a.id) : [];
   const dayN = daysBetween(trip.start_date, a.date) + 1;
-  const map = a.kind === 'move' ? null : mapLink(livePlace, name);
-  const address = livePlace?.address.trim();
-
-  const actMap = new Map(store.byTrip('activities', tripId).map((x) => [x.id, x]));
-  const planMap = new Map(store.byTrip('day_plans', tripId).map((p) => [p.date, p]));
-  const tickets = store.byTrip('tickets', tripId)
-    .filter((t) => t.activity_ids.includes(a.id))
-    .filter((t) => !ctx.myTravelerId || ctx.canSeeAll || ticketForTraveler(t, ctx.myTravelerId, actMap, planMap))
-    .sort((x, y) => x.sort_order - y.sort_order);
+  const map = a.map_url ? safeUrl(a.map_url) : null;
+  const links = (a.links ?? []).filter((l) => safeUrl(l.url));
+  const tickets = myTickets(ctx).filter((t) => t.activity_ids.includes(a.id)).sort((x, y) => x.sort_order - y.sort_order);
 
   async function remove() {
     const ok = await confirmDialog({
       title: `刪除「${name}」？`,
-      message: steps.length ? '這筆行程和它的交通步驟會一起移到回收桶。票券不會被刪除。' : '這筆行程會被刪除。景點資料和票券都會保留。',
+      message: steps.length ? '這筆行程和它的交通步驟會一起移到回收桶。票券不會被刪除。' : '這筆行程會被刪除，票券會保留。',
       confirmText: '刪除',
       danger: true,
     });
@@ -98,11 +118,6 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
     navigate(`/t/${tripId}/plan/${a!.date}`, { replace: true });
     toast('已刪除', 'ok', { label: '復原', run: () => { void restoreActivity(store, a!.id); } });
   }
-
-  // 移動行程：在 Naver Map 搜尋目的地（Naver Map 沒有可直接帶入起終點的公開網址格式）
-  const routeLink = a.kind === 'move' && (a.from_name || a.to_name)
-    ? `https://map.naver.com/p/search/${encodeURIComponent(a.to_name || a.from_name)}`
-    : null;
 
   return (
     <Screen header={
@@ -114,41 +129,26 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
         <div className="detail-hero" style={{ background: kind.bg }}>
           <span className="badge">{kind.label}</span>
           <h1 className="detail-title">{name}</h1>
-          {a.start_time ? (
-            <span className="num" style={{ fontSize: 22 }}>{hhmm(a.start_time)}{end ? ` – ${end}` : ''}</span>
-          ) : <span className="muted">時間未定</span>}
-          {a.duration_min && !a.start_time ? <span className="small">停留約 {a.duration_min} 分鐘</span> : null}
+          {a.start_time ? <span className="num" style={{ fontSize: 22 }}>{hhmm(a.start_time)}</span> : <span className="muted">時間未定</span>}
         </div>
 
-        <div className="info-row">
-          <Icon.people />
-          <span>誰參加：{aud}</span>
-        </div>
-        {a.cost !== null ? (
-          <div className="info-row"><Icon.money /><span>費用：{a.cost}{a.currency ? ` ${a.currency}` : ''}</span></div>
-        ) : null}
         {a.notes.trim() ? (
           <div className="info-row"><Icon.note /><RichText text={a.notes} /></div>
         ) : null}
 
-        {livePlace && (livePlace.description.trim() || address || livePlace.notes.trim()) ? (
-          <div className="card stack-sm">
-            <div className="section-head">
-              <h2 className="section-title">景點資訊</h2>
-              <button type="button" className="link-btn" onClick={() => navigate(`/t/${tripId}/p/${livePlace.id}`)}>景點資料</button>
-            </div>
-            {livePlace.description.trim() ? <RichText text={livePlace.description} /> : null}
-            {address ? (
-              <a href={mapLink({ map_url: '', name: '', address }) ?? '#'} target="_blank" rel="noopener noreferrer" className="small">{address}</a>
+        {map || links.length ? (
+          <div className="stack-sm">
+            {map ? (
+              <a className="btn btn-block" style={{ background: 'var(--mint)', boxShadow: 'var(--pop)', minHeight: 54, fontSize: 17 }} href={map} target="_blank" rel="noopener noreferrer">
+                <Icon.place /> 打開地圖
+              </a>
             ) : null}
-            {livePlace.notes.trim() ? <RichText text={livePlace.notes} className="small muted" /> : null}
+            {links.map((l, i) => (
+              <a key={i} className="btn btn-block" style={{ justifyContent: 'flex-start' }} href={safeUrl(l.url)!} target="_blank" rel="noopener noreferrer">
+                <Icon.link /> <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{linkLabel(l)}</span>
+              </a>
+            ))}
           </div>
-        ) : null}
-
-        {map ? (
-          <a className="btn btn-block" style={{ background: 'var(--mint)', boxShadow: 'var(--pop)', minHeight: 56, fontSize: 18 }} href={map} target="_blank" rel="noopener noreferrer">
-            <Icon.place /> {livePlace?.map_url && safeUrl(livePlace.map_url) ? 'Naver Map 帶我去' : '在 Naver Map 搜尋'}
-          </a>
         ) : null}
 
         {a.kind === 'move' ? (
@@ -159,25 +159,22 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
             ) : (
               <p className="notice small">還沒有交通步驟。{ctx.editable ? '按右上角「編輯」加入。' : ''}</p>
             )}
-            {routeLink ? (
-              <a className="btn btn-block" style={{ background: 'var(--mint)', boxShadow: 'var(--pop)' }} href={routeLink} target="_blank" rel="noopener noreferrer">
-                <Icon.place /> 在 Naver Map 找「{a.to_name || a.from_name}」
-              </a>
-            ) : null}
           </div>
         ) : null}
 
         <div className="stack-sm">
           <div className="section-head">
-            <h2 className="section-title">票券</h2>
+            <h2 className="section-title">我的票券</h2>
             {ctx.editable ? (
               <button type="button" className="link-btn" onClick={() => navigate(`/t/${tripId}/tk/new/${a.id}`)}>＋ 加票券</button>
             ) : null}
           </div>
           {tickets.length ? tickets.map((t) => <TicketCard key={t.id} t={t} ctx={ctx} />) : (
-            <p className="muted small">這筆行程沒有票券。</p>
+            <p className="muted small">{ctx.myTravelerId ? '這筆行程沒有你的票券。' : '到「旅伴・設定」選「我是誰」，就會顯示你的票券。'}</p>
           )}
         </div>
+
+        {user ? <PrivateMemo tripId={tripId} activityId={a.id} userId={user.id} /> : null}
 
         {ctx.editable ? (
           <Button variant="danger" block onClick={remove}><Icon.trash /> 刪除這筆行程</Button>

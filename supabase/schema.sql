@@ -244,6 +244,10 @@ alter table public.activities add constraint activities_kind_check
 alter table public.day_plans add column if not exists title text not null default '';
 alter table public.day_plans add column if not exists group_names jsonb not null default '{}'::jsonb;
 
+-- 第三版：行程的地圖連結與其他連結（[{"label":"官網","url":"https://…"}]）
+alter table public.activities add column if not exists map_url text not null default '';
+alter table public.activities add column if not exists links jsonb not null default '[]'::jsonb;
+
 -- ---------- 個人狀態（可選的「已完成」）----------
 create table if not exists public.personal_status (
   id uuid primary key,
@@ -261,6 +265,22 @@ create table if not exists public.personal_status (
   foreign key (traveler_id, trip_id) references public.travelers(id, trip_id) on delete cascade
 );
 
+-- ---------- 私人備忘錄：只有寫的人自己看得到 ----------
+create table if not exists public.private_notes (
+  id uuid primary key,
+  trip_id uuid not null references public.trips(id) on delete cascade,
+  activity_id uuid not null,
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  note text not null default '',
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  rev bigint not null default 0,
+  foreign key (activity_id, trip_id) references public.activities(id, trip_id) on delete cascade
+);
+create index if not exists private_notes_sync_idx on public.private_notes(trip_id, updated_at);
+
 -- ---------- 索引（同步時依旅行與更新時間查詢）----------
 create index if not exists trips_updated_idx on public.trips(updated_at);
 create index if not exists travelers_sync_idx on public.travelers(trip_id, updated_at);
@@ -277,11 +297,11 @@ create index if not exists trip_members_user_idx on public.trip_members(user_id)
 do $$
 declare t text;
 begin
-  foreach t in array array['trips','travelers','places','activities','route_steps','tickets','day_plans','personal_status'] loop
+  foreach t in array array['trips','travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes'] loop
     execute format('drop trigger if exists touch on public.%I', t);
     execute format('create trigger touch before insert or update on public.%I for each row execute function public.tg_touch()', t);
   end loop;
-  foreach t in array array['travelers','places','activities','route_steps','tickets','day_plans','personal_status'] loop
+  foreach t in array array['travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes'] loop
     execute format('drop trigger if exists lock_trip on public.%I', t);
     execute format('create trigger lock_trip before update on public.%I for each row execute function public.tg_lock_trip()', t);
   end loop;
@@ -376,6 +396,7 @@ alter table public.route_steps enable row level security;
 alter table public.tickets enable row level security;
 alter table public.day_plans enable row level security;
 alter table public.personal_status enable row level security;
+alter table public.private_notes enable row level security;
 
 -- 旅行
 drop policy if exists trips_select on public.trips;
@@ -436,6 +457,12 @@ create policy personal_status_update on public.personal_status for update to aut
 drop policy if exists personal_status_delete on public.personal_status;
 create policy personal_status_delete on public.personal_status for delete to authenticated
   using (public.can_edit(trip_id));
+
+-- 私人備忘錄：只能看、寫自己的
+drop policy if exists private_notes_own on public.private_notes;
+create policy private_notes_own on public.private_notes for all to authenticated
+  using (user_id = auth.uid() and public.is_member(trip_id))
+  with check (user_id = auth.uid() and public.is_member(trip_id));
 
 -- ---------- 函式（API）----------
 

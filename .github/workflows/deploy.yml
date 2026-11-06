@@ -71,8 +71,9 @@ jobs:
           trips=$(curl -sS "$URL/rest/v1/trips?select=id&limit=1" -H "apikey: $KEY" || true)
           echo "trips: $trips"
           case "$trips" in \[*) echo "✅ 資料表存在，且未登入的人看不到資料";; *) echo "::error::讀取 trips 資料表失敗：$trips"; ok=0;; esac
-          v2=$(curl -sS "$URL/rest/v1/day_plans?select=title,group_names&limit=1" -H "apikey: $KEY" || true)
-          case "$v2" in \[*) echo "✅ 第二版資料庫已更新（每日主題、組別名稱）";; *) echo "::error::資料庫還是舊版：請到 Supabase SQL Editor 再貼上執行一次 supabase/schema.sql（$v2）"; ok=0;; esac
+          v3a=$(curl -sS "$URL/rest/v1/activities?select=map_url,links&limit=1" -H "apikey: $KEY" || true)
+          v3b=$(curl -sS "$URL/rest/v1/private_notes?select=id&limit=1" -H "apikey: $KEY" || true)
+          case "$v3a$v3b" in \[*\]\[*) echo "✅ 第三版資料庫已更新（地圖連結、其他連結、私人備忘錄）";; *) echo "::error::資料庫還是舊版：請到 Supabase SQL Editor 再貼上執行一次 supabase/schema.sql（$v3a $v3b）"; ok=0;; esac
           storage=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$URL/storage/v1/object/list/trip-files" -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d '{"prefix":""}' || true)
           echo "storage list: $storage"
           settings=$(curl -sS "$URL/auth/v1/settings" -H "apikey: $KEY" || true)

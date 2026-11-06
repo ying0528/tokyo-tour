@@ -1,8 +1,9 @@
 // 儲存動作：一個操作會牽動的資料（景點、交通步驟、票券關聯）都在這裡一起處理，畫面只要呼叫一次。
-import { newActivity, newDayPlan, newPlace, newRouteStep, newTicket, newTraveler, newTrip } from './factories.ts';
+import { newActivity, newDayPlan, newPlace, newPrivateNote, newRouteStep, newTicket, newTraveler, newTrip } from './factories.ts';
 import type { LocalStore } from './store.ts';
-import type { Activity, ActivityKind, DayPlan, Place, PlaceKind, RouteMode, RouteStep, Ticket, Traveler, Trip } from './types.ts';
-import { dayPlanId, isPlaceKind } from '../lib/plan.ts';
+import type { Activity, ActivityKind, DayPlan, NamedLink, Place, PlaceKind, PrivateNote, RouteMode, RouteStep, Ticket, Traveler, Trip } from './types.ts';
+import { dayPlanId, stableId } from '../lib/plan.ts';
+import { safeUrl } from '../lib/links.ts';
 import { addDays, daysBetween } from '../lib/dates.ts';
 
 // ---------- 行程 ----------
@@ -25,20 +26,18 @@ export interface ActivityDraft {
   kind: ActivityKind;
   date: string;
   start_time: string | null;
-  duration_min: number | null;
-  cost: number | null;
   notes: string;
   audience_groups: string[];
   audience_travelers: string[];
-  /** 景點類：名稱與選到的景點 */
+  /** 景點、用餐、住宿的名稱 */
   name: string;
-  placeId: string | null;
-  /** 已連結的景點改了名字時：all＝景點一起改名；this＝只改這筆的顯示名稱 */
-  renameMode: 'all' | 'this';
   /** 移動類 */
   from_name: string;
   to_name: string;
   steps: StepDraft[];
+  /** 地圖連結與其他連結 */
+  map_url: string;
+  links: NamedLink[];
 }
 
 export function emptyStep(mode: RouteMode = 'subway'): StepDraft {
@@ -64,26 +63,37 @@ export function liveSteps(store: LocalStore, activityId: string): RouteStep[] {
 export function draftFromActivity(store: LocalStore, a: Activity): ActivityDraft {
   const place = store.get('places', a.place_id);
   return {
-    kind: a.kind, date: a.date, start_time: a.start_time ? a.start_time.slice(0, 5) : null, duration_min: a.duration_min,
-    cost: a.cost, notes: a.notes, audience_groups: [...a.audience_groups], audience_travelers: [...a.audience_travelers],
-    name: a.title.trim() || place?.name || '', placeId: place && !place.deleted_at ? place.id : null, renameMode: a.title.trim() ? 'this' : 'all',
+    kind: a.kind, date: a.date, start_time: a.start_time ? a.start_time.slice(0, 5) : null,
+    notes: a.notes, audience_groups: [...a.audience_groups], audience_travelers: [...a.audience_travelers],
+    name: a.kind === 'move' ? '' : a.title.trim() || place?.name || '',
     from_name: a.from_name, to_name: a.to_name, steps: liveSteps(store, a.id).map(stepToDraft),
+    map_url: a.map_url ?? '', links: (a.links ?? []).map((l) => ({ ...l })),
   };
 }
 
-/** 同一趟旅行中名稱相同（不分大小寫、前後空白）的景點 */
+/** 舊版留下的：同一趟旅行中名稱相同的景點 */
 export function findPlaceByName(store: LocalStore, tripId: string, name: string): Place | undefined {
   const key = name.trim().toLowerCase();
   if (!key) return undefined;
   return store.byTrip('places', tripId).find((p) => p.name.trim().toLowerCase() === key);
 }
 
-/** 有幾筆行程使用這個景點 */
+/** 有幾筆行程使用這個景點（舊版資料） */
 export function placeUsage(store: LocalStore, placeId: string, exceptActivityId?: string): Activity[] {
   return store.all('activities').filter((a) => a.place_id === placeId && !a.deleted_at && a.id !== exceptActivityId);
 }
 
 export interface ValidationError { field: string; message: string }
+
+/** 連結沒填名稱時，用網站名稱當預設 */
+export function linkLabel(l: NamedLink): string {
+  if (l.label.trim()) return l.label.trim();
+  try {
+    return new URL(safeUrl(l.url) ?? l.url).hostname.replace(/^www\./, '');
+  } catch {
+    return '連結';
+  }
+}
 
 export function validateActivity(d: ActivityDraft): ValidationError | null {
   if (!d.date) return { field: 'date', message: '請選擇日期' };
@@ -92,39 +102,31 @@ export function validateActivity(d: ActivityDraft): ValidationError | null {
   } else if (!d.name.trim()) {
     return { field: 'name', message: '請輸入名稱' };
   }
-  if (d.duration_min !== null && (!Number.isFinite(d.duration_min) || d.duration_min < 0)) return { field: 'duration_min', message: '停留時間不正確' };
+  if (d.map_url.trim() && !safeUrl(d.map_url)) return { field: 'map_url', message: '地圖連結要是 https:// 開頭的網址' };
+  const bad = d.links.findIndex((l) => l.url.trim() && !safeUrl(l.url));
+  if (bad >= 0) return { field: `link-${bad}`, message: '這個連結不是正確的網址' };
   return null;
 }
 
-/** 新增或修改一筆行程（連同景點與交通步驟），回傳行程 id */
+/** 新增或修改一筆行程（連同交通步驟），回傳行程 id */
 export async function saveActivity(store: LocalStore, tripId: string, existingId: string | null, d: ActivityDraft): Promise<string> {
   const err = validateActivity(d);
   if (err) throw new Error(err.message);
   const existing = existingId ? store.get('activities', existingId) : undefined;
-
-  const common: Partial<Activity> = {
-    kind: d.kind, date: d.date, start_time: d.start_time || null, duration_min: d.duration_min, cost: d.cost,
-    notes: d.notes, audience_groups: d.audience_groups, audience_travelers: d.audience_travelers,
+  const isMove = d.kind === 'move';
+  const fields: Partial<Activity> = {
+    kind: d.kind, date: d.date, start_time: d.start_time || null, notes: d.notes,
+    audience_groups: d.audience_groups, audience_travelers: d.audience_travelers,
+    place_id: null,
+    title: isMove ? '' : d.name.trim(),
+    from_name: isMove ? d.from_name.trim() : '',
+    to_name: isMove ? d.to_name.trim() : '',
+    map_url: d.map_url.trim() ? safeUrl(d.map_url) ?? '' : '',
+    links: d.links
+      .filter((l) => l.url.trim())
+      .map((l) => ({ label: l.label.trim(), url: safeUrl(l.url) ?? '' }))
+      .filter((l) => l.url),
   };
-
-  let fields: Partial<Activity>;
-  if (isPlaceKind(d.kind)) {
-    const name = d.name.trim();
-    let place = d.placeId ? store.get('places', d.placeId) : undefined;
-    if (place?.deleted_at) place = undefined;
-    let title = '';
-    if (place) {
-      if (place.name.trim() !== name) {
-        if (d.renameMode === 'all') await store.update('places', place.id, { name });
-        else title = name;
-      }
-    } else {
-      place = findPlaceByName(store, tripId, name) ?? await store.create('places', newPlace(tripId, { name, kind: d.kind as PlaceKind }));
-    }
-    fields = { ...common, place_id: place.id, title, from_name: '', to_name: '' };
-  } else {
-    fields = { ...common, place_id: null, title: '', from_name: d.from_name.trim(), to_name: d.to_name.trim() };
-  }
 
   let id: string;
   if (existing) {
@@ -136,7 +138,7 @@ export async function saveActivity(store: LocalStore, tripId: string, existingId
 
   // 交通步驟：只有移動類保留；換成其他類型時移到回收桶
   const current = liveSteps(store, id);
-  const keep = d.kind === 'move' ? d.steps : [];
+  const keep = isMove ? d.steps : [];
   const keepIds = new Set(keep.map((s) => s.id).filter(Boolean));
   for (const s of current) if (!keepIds.has(s.id)) await store.softDelete('route_steps', s.id);
   for (let i = 0; i < keep.length; i++) {
@@ -146,6 +148,24 @@ export async function saveActivity(store: LocalStore, tripId: string, existingId
     else await store.create('route_steps', newRouteStep(tripId, id, values));
   }
   return id;
+}
+
+// ---------- 私人備忘錄 ----------
+
+export function privateNoteId(userId: string, activityId: string): string {
+  return stableId(`note:${userId}:${activityId}`);
+}
+
+export function getPrivateNote(store: LocalStore, activityId: string, userId: string): PrivateNote | undefined {
+  const n = store.get('private_notes', privateNoteId(userId, activityId));
+  return n && !n.deleted_at ? n : undefined;
+}
+
+export async function savePrivateNote(store: LocalStore, tripId: string, activityId: string, userId: string, note: string) {
+  const id = privateNoteId(userId, activityId);
+  const existing = store.get('private_notes', id);
+  if (existing) await store.update('private_notes', id, { note, deleted_at: null });
+  else if (note.trim()) await store.create('private_notes', newPrivateNote(tripId, activityId, userId, id, note));
 }
 
 export function deleteActivity(store: LocalStore, id: string) {
@@ -338,6 +358,7 @@ export async function copyTrip(store: LocalStore, ownerId: string, src: Backup, 
         date: move(a.date), start_time: a.start_time, duration_min: a.duration_min, kind: a.kind,
         place_id: a.place_id ? remap(a.place_id) ?? null : null, title: a.title || (a.place_id && !remap(a.place_id) ? src.places.find((p) => p.id === a.place_id)?.name ?? '' : ''),
         from_name: a.from_name, to_name: a.to_name, cost: a.cost, currency: a.currency, notes: a.notes,
+        map_url: a.map_url ?? '', links: a.links ?? [],
         audience_groups: opts.groups ? a.audience_groups : [],
         audience_travelers: opts.groups ? a.audience_travelers.map(remap).filter((x): x is string => Boolean(x)) : [],
       }));

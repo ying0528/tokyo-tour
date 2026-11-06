@@ -4,7 +4,8 @@ import { MemoryPersistence } from '../../src/data/persistence.ts';
 import { LocalStore } from '../../src/data/store.ts';
 import { newTraveler, newTrip } from '../../src/data/factories.ts';
 import {
-  copyTrip, dayPlanOf, deletePlace, emptyStep, exportTrip, liveSteps, parseBackup, placeUsage, saveActivity, saveDayPlan, saveTicket,
+  copyTrip, dayPlanOf, emptyStep, exportTrip, getPrivateNote, linkLabel, liveSteps, parseBackup, saveActivity, saveDayPlan,
+  savePrivateNote, saveTicket, validateActivity,
 } from '../../src/data/actions.ts';
 import type { ActivityDraft } from '../../src/data/actions.ts';
 import { activityName } from '../../src/lib/plan.ts';
@@ -18,38 +19,38 @@ async function setup() {
 
 function draft(over: Partial<ActivityDraft>): ActivityDraft {
   return {
-    kind: 'sight', date: '2026-11-23', start_time: null, duration_min: null, cost: null, notes: '',
-    audience_groups: [], audience_travelers: [], name: '', placeId: null, renameMode: 'all',
-    from_name: '', to_name: '', steps: [], ...over,
+    kind: 'sight', date: '2026-11-23', start_time: null, notes: '',
+    audience_groups: [], audience_travelers: [], name: '',
+    from_name: '', to_name: '', steps: [], map_url: '', links: [], ...over,
   };
 }
 
-test('新增景點類行程：新名稱自動建立景點；同名不會重複建立', async () => {
+test('行程名稱直接存在行程上，不再建立景點；地圖與其他連結一起儲存', async () => {
   const { store, tripId } = await setup();
-  const a1 = await saveActivity(store, tripId, null, draft({ kind: 'food', name: '一蘭拉麵', start_time: '18:00' }));
-  const a2 = await saveActivity(store, tripId, null, draft({ kind: 'food', name: ' 一蘭拉麵 ', date: '2026-11-25' }));
-  const places = store.byTrip('places', tripId);
-  assert.equal(places.length, 1);
-  assert.equal(places[0].kind, 'food');
-  assert.equal(store.get('activities', a1)!.place_id, places[0].id);
-  assert.equal(store.get('activities', a2)!.place_id, places[0].id);
-  assert.equal(placeUsage(store, places[0].id).length, 2);
+  const id = await saveActivity(store, tripId, null, draft({
+    kind: 'food', name: '一蘭拉麵', start_time: '18:00',
+    map_url: 'https://maps.app.goo.gl/abc',
+    links: [{ label: '訂位', url: 'https://example.com/book' }, { label: '', url: 'www.ichiran.com' }, { label: '空的', url: '' }],
+  }));
+  const a = store.get('activities', id)!;
+  assert.equal(store.byTrip('places', tripId).length, 0);
+  assert.equal(activityName(a, undefined), '一蘭拉麵');
+  assert.equal(a.map_url, 'https://maps.app.goo.gl/abc');
+  assert.deepEqual(a.links, [{ label: '訂位', url: 'https://example.com/book' }, { label: '', url: 'https://www.ichiran.com/' }]);
+  assert.equal(linkLabel(a.links[1]), 'ichiran.com');
+  assert.ok(validateActivity(draft({ name: 'x', map_url: 'javascript:alert(1)' })));
+  assert.ok(validateActivity(draft({ name: 'x', links: [{ label: '壞的', url: 'not a url' }] })));
 });
 
-test('改名規則：全部一起改 vs 只改這一筆', async () => {
+test('私人備忘錄：每人每筆行程一則，同一則可以一直修改', async () => {
   const { store, tripId } = await setup();
-  const a1 = await saveActivity(store, tripId, null, draft({ name: '明治神宮' }));
-  const a2 = await saveActivity(store, tripId, null, draft({ name: '明治神宮', date: '2026-11-24' }));
-  const pid = store.get('activities', a1)!.place_id!;
-
-  await saveActivity(store, tripId, a1, draft({ name: '明治神宮外苑', placeId: pid, renameMode: 'all' }));
-  assert.equal(store.get('places', pid)!.name, '明治神宮外苑');
-  assert.equal(activityName(store.get('activities', a2)!, store.get('places', pid)), '明治神宮外苑', '另一筆也跟著改');
-
-  await saveActivity(store, tripId, a2, draft({ name: '外苑（早上）', placeId: pid, renameMode: 'this', date: '2026-11-24' }));
-  assert.equal(store.get('places', pid)!.name, '明治神宮外苑', '景點本身不變');
-  assert.equal(activityName(store.get('activities', a2)!, store.get('places', pid)), '外苑（早上）');
-  assert.equal(activityName(store.get('activities', a1)!, store.get('places', pid)), '明治神宮外苑');
+  const id = await saveActivity(store, tripId, null, draft({ name: '晴空塔' }));
+  await savePrivateNote(store, tripId, id, 'user-a', '記得帶相機');
+  await savePrivateNote(store, tripId, id, 'user-a', '記得帶相機和行動電源');
+  await savePrivateNote(store, tripId, id, 'user-b', '我想吃冰淇淋');
+  assert.equal(getPrivateNote(store, id, 'user-a')!.note, '記得帶相機和行動電源');
+  assert.equal(getPrivateNote(store, id, 'user-b')!.note, '我想吃冰淇淋');
+  assert.equal(store.byTrip('private_notes', tripId).length, 2);
 });
 
 test('移動行程：多步交通一起儲存、編輯、刪除、排序；換類型時交通步驟移入回收桶', async () => {
@@ -72,17 +73,6 @@ test('移動行程：多步交通一起儲存、編輯、刪除、排序；換�
 
   await saveActivity(store, tripId, id, draft({ kind: 'sight', name: '大森' }));
   assert.equal(liveSteps(store, id).length, 0);
-});
-
-test('刪除景點：行程保留且名稱不消失', async () => {
-  const { store, tripId } = await setup();
-  const id = await saveActivity(store, tripId, null, draft({ name: '上野動物園' }));
-  const pid = store.get('activities', id)!.place_id!;
-  await deletePlace(store, pid);
-  const a = store.get('activities', id)!;
-  assert.equal(a.place_id, null);
-  assert.equal(activityName(a, undefined), '上野動物園');
-  assert.ok(!a.deleted_at);
 });
 
 test('每日分組設定：同一天只會有一筆', async () => {

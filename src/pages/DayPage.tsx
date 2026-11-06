@@ -5,7 +5,7 @@ import { goBack } from '../app/router.ts';
 import { tripCtx } from '../app/tripContext.ts';
 import { dayPlanOf, saveDayPlan } from '../data/actions.ts';
 import { dayLabel, daysBetween } from '../lib/dates.ts';
-import { Button, Empty, Field, Screen, TopBar } from '../ui/kit.tsx';
+import { Button, Empty, Screen, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { Mascot } from '../ui/Mascot.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
@@ -18,7 +18,6 @@ export function DayPage({ tripId, date }: { tripId: string; date: string }) {
   const { user } = useSession();
   const trip = store.get('trips', tripId);
   const plan = trip ? dayPlanOf(store, tripId, date) : undefined;
-  const [title, setTitle] = useState(plan?.title ?? '');
   const [mode, setMode] = useState<'together' | 'split'>(plan?.mode ?? 'together');
   const [groups, setGroups] = useState<string[]>(plan?.groups?.length ? plan.groups : ['A', 'B']);
   const [names, setNames] = useState<Record<string, string>>(plan?.group_names ?? {});
@@ -67,7 +66,7 @@ export function DayPage({ tripId, date }: { tripId: string; date: string }) {
     try {
       const cleanNames = Object.fromEntries(groups.map((g) => [g, (names[g] ?? '').trim()]).filter(([, v]) => v));
       const cleanAssign = Object.fromEntries(Object.entries(assign).filter(([t, g]) => groups.includes(g) && ctx.travelers.some((x) => x.id === t)));
-      await saveDayPlan(store, tripId, date, { title: title.trim(), mode, groups, group_names: cleanNames, assignments: cleanAssign });
+      await saveDayPlan(store, tripId, date, { mode, groups, group_names: cleanNames, assignments: cleanAssign });
       toast('已儲存');
       close();
     } finally {
@@ -82,10 +81,6 @@ export function DayPage({ tripId, date }: { tripId: string; date: string }) {
         right={<Button variant="primary" busy={busy} onClick={save} style={{ minHeight: 44 }}>儲存</Button>} />
     }>
       <div className="pad stack-lg">
-        <Field label="這天的主題（可不填）" hint="會顯示在行程最上方，例如「澀谷・原宿」">
-          <input id="day-title" className="input" value={title} placeholder="例如：鎌倉・江之島" onChange={(e) => setTitle(e.target.value)} />
-        </Field>
-
         <div className="field">
           <span className="field-label">這一天</span>
           <div className="grid-2" role="radiogroup" aria-label="這一天要不要分組">

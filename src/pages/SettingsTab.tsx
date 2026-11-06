@@ -27,6 +27,8 @@ export function SettingsTab({ trip }: { trip: Trip }) {
   async function setMe(travelerId: string | null) {
     setSavingMe(true);
     try {
+      // 剛建立的旅行可能還沒上傳，先同步再設定
+      if (store.pending().length) await syncer.sync({ pull: false });
       await remote.setMyTraveler(trip.id, travelerId);
       await syncer.sync();
       toast('已更新');

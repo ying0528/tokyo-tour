@@ -12,8 +12,8 @@ export interface KindInfo {
 
 /** 顏色沿用原本行程表：紅＝必去、橘＝餐飲、綠＝購物、青＝廁所、藍灰＝交通／一般 */
 export const KINDS: Record<ActivityKind, KindInfo> = {
-  sight: { label: '必去景點', short: '必去', bg: '#ffd1da', sub: '#6b3d48' },
-  food: { label: '好吃的', short: '好吃', bg: '#ffdcb0', sub: '#6b4a22' },
+  sight: { label: '景點', short: '景點', bg: '#ffd1da', sub: '#6b3d48' },
+  food: { label: '用餐', short: '用餐', bg: '#ffdcb0', sub: '#6b4a22' },
   shop: { label: '買買買', short: '買買', bg: '#c6efd9', sub: '#2f5a44' },
   toilet: { label: '廁所', short: '廁所', bg: '#bde8f0', sub: '#2a5560' },
   lodging: { label: '住宿', short: '住宿', bg: '#e6d4ff', sub: '#4d3a6b' },
@@ -21,7 +21,8 @@ export const KINDS: Record<ActivityKind, KindInfo> = {
   other: { label: '其他', short: '其他', bg: '#ffffff', sub: '#5b4f63' },
 };
 
-export const ACTIVITY_KINDS: ActivityKind[] = ['sight', 'food', 'shop', 'toilet', 'lodging', 'move', 'other'];
+/** 新增／編輯行程時可選的類型 */
+export const ACTIVITY_KINDS: ActivityKind[] = ['sight', 'food', 'move', 'lodging'];
 export const PLACE_KINDS: PlaceKind[] = ['sight', 'food', 'shop', 'toilet', 'lodging', 'other'];
 
 export function isPlaceKind(k: ActivityKind): k is PlaceKind {
@@ -90,7 +91,12 @@ export function activityName(a: Activity, place: Place | undefined): string {
 
 /** 同一趟旅行同一天的每日設定，id 固定（兩支手機離線各自建立也不會重複） */
 export function dayPlanId(tripId: string, date: string): string {
-  const h = hash128(`day:${tripId}:${date}`);
+  return stableId(`day:${tripId}:${date}`);
+}
+
+/** 由文字算出固定的 uuid（同樣的輸入永遠得到同一個 id） */
+export function stableId(key: string): string {
+  const h = hash128(key);
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
