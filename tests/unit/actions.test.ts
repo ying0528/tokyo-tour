@@ -21,7 +21,7 @@ function draft(over: Partial<ActivityDraft>): ActivityDraft {
   return {
     kind: 'sight', date: '2026-11-23', start_time: null, notes: '',
     audience_groups: [], audience_travelers: [], name: '',
-    from_name: '', to_name: '', steps: [], map_url: '', links: [], ...over,
+    from_name: '', to_name: '', steps: [], map_url: '', links: [], images: [], ...over,
   };
 }
 

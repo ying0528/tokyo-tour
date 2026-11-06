@@ -14,6 +14,7 @@ import { Icon } from '../ui/icons.tsx';
 import { Mascot } from '../ui/Mascot.tsx';
 import { RichText } from '../ui/RichText.tsx';
 import { TicketCard } from './TicketsTab.tsx';
+import { ActImage } from '../ui/ActImage.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
 
 export function modeIcon(m: RouteStep['mode']): ReactNode {
@@ -136,6 +137,7 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
         {a.notes.trim() ? (
           <div className="info-row"><Icon.note /><RichText text={a.notes} /></div>
         ) : null}
+        {(a.images ?? []).map((img, i) => <ActImage key={img.id} path={img.path} alt={`${name} 的補充圖片 ${i + 1}`} />)}
 
         {map || links.length ? (
           <div className="stack-sm">

@@ -78,6 +78,8 @@ export interface Activity extends TripContent {
   map_url: string;
   /** 其他連結，可自己命名 */
   links: NamedLink[];
+  /** 補充圖片 */
+  images: { id: string; path: string }[];
 }
 
 export interface NamedLink {

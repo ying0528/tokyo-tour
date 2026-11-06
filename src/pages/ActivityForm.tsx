@@ -11,6 +11,8 @@ import { ACTIVITY_KINDS, groupName, isSplit, isTransit, KINDS, ROUTE_MODES } fro
 import { Button, Empty, Field, Screen, TextArea, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
+import { prepareUpload } from '../lib/image.ts';
+import { ActImage } from '../ui/ActImage.tsx';
 
 function num(v: string): number | null {
   const t = v.trim();
@@ -87,11 +89,27 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
 
   const [d, setD] = useState<ActivityDraft>(() => existing ? draftFromActivity(store, existing) : {
     kind: 'sight', date: date && days.includes(date) ? date : days[0] ?? '', start_time: null, notes: '',
-    audience_groups: [], audience_travelers: [], name: '', from_name: '', to_name: '', steps: [], map_url: '', links: [],
+    audience_groups: [], audience_travelers: [], name: '', from_name: '', to_name: '', steps: [], map_url: '', links: [], images: [],
   });
   const [error, setError] = useState<{ field: string; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [showPeople, setShowPeople] = useState(() => Boolean(existing?.audience_travelers.length));
+  const [processing, setProcessing] = useState(false);
+
+  async function addImages(files: FileList | null) {
+    if (!files?.length) return;
+    setProcessing(true);
+    try {
+      const added: { id: string; blob: Blob }[] = [];
+      for (const f of Array.from(files)) {
+        if (!f.type.startsWith('image/')) continue;
+        added.push({ id: crypto.randomUUID(), blob: await prepareUpload(f) });
+      }
+      setD((x) => ({ ...x, images: [...x.images, ...added] }));
+    } finally {
+      setProcessing(false);
+    }
+  }
 
   const set = (patch: Partial<ActivityDraft>) => { setD((x) => ({ ...x, ...patch })); setError(null); };
   const close = () => goBack(isEdit ? `/t/${tripId}/a/${activityId}` : `/t/${tripId}/plan/${d.date}`);
@@ -255,6 +273,22 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
         <Field label="補充說明（可不填）">
           <TextArea value={d.notes} onChange={(v) => set({ notes: v })} placeholder="營業時間、要排隊、訂位資訊…" />
         </Field>
+
+        <div className="field">
+          <span className="field-label">補充圖片（可不填）</span>
+          {d.images.map((img, i) => (
+            <div key={img.id} className="act-img-edit">
+              <ActImage path={img.path} blob={img.blob} alt={`補充圖片 ${i + 1}`} />
+              <button type="button" className="icon-btn" aria-label={`刪除補充圖片 ${i + 1}`} onClick={() => set({ images: d.images.filter((x) => x.id !== img.id) })}><Icon.trash /></button>
+            </div>
+          ))}
+          <label className="btn btn-secondary" style={{ borderStyle: 'dashed', alignSelf: 'flex-start', position: 'relative' }}>
+            {processing ? <span className="spinner" aria-hidden="true" /> : <Icon.camera />} 新增補充圖片
+            <input type="file" accept="image/*" multiple aria-label="選擇補充圖片" style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+              onChange={(e) => { void addImages(e.target.files); e.target.value = ''; }} />
+          </label>
+          <span className="field-hint">例如菜單、地圖截圖、排隊位置。照片會自動縮小，沒網路也能先存。</span>
+        </div>
 
         <Field label="地圖連結（可不填）" hint="在 Google Maps 或 Naver Map 按「分享」複製連結貼上" error={error?.field === 'map_url' ? error.message : null}>
           <input id="act-map" className="input" inputMode="url" value={d.map_url} placeholder="https://maps.app.goo.gl/…" onChange={(e) => set({ map_url: e.target.value })} />

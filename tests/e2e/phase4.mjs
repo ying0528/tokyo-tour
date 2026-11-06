@@ -81,6 +81,19 @@ await addActivity({ name: '新宿御苑', time: '08:30' });
 await addActivity({ name: '明治神宮外苑', time: '10:00' });
 await addActivity({ kind: '用餐', name: 'EDW yellow', time: '11:00' });
 
+// ---------- 行程補充圖片：跟手機一樣寬 ----------
+await page.getByRole('button', { name: /EDW yellow/ }).click();
+await page.getByRole('button', { name: '編輯' }).click();
+await page.getByLabel('選擇補充圖片').setInputFiles({ name: 'menu.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC', 'base64') });
+await page.locator('.act-img img').waitFor();
+await page.getByRole('button', { name: '儲存' }).first().click();
+await page.locator('.detail-hero').waitFor();
+await page.locator('.act-img img').waitFor();
+await page.waitForTimeout(300);
+const imgW = (await page.locator('.act-img').boundingBox()).width;
+check(imgW > 390 * 0.85, `補充圖片跟手機一樣寬（${Math.round(imgW)}px）`);
+await page.getByRole('button', { name: '返回' }).click();
+
 // ---------- 路線頁：依行程自動產生每一段 ----------
 await tab('路線').click();
 await page.locator('.leg-card').first().waitFor();
@@ -174,7 +187,9 @@ await addItem('text', '面膜 2 盒');
 await addItem('link', '藥妝店優惠券', 'https://example.com/coupon');
 await addItem('image', '藍色包裝那款');
 await page.locator('img.li-thumb').waitFor();
-check(true, '可以新增圖片項目，清單裡顯示小圖');
+const rowH = (await page.locator('.li.image').boundingBox()).height;
+const textH = (await page.locator('.li').first().boundingBox()).height;
+check(rowH >= textH * 2.7, `圖片項目是三倍欄高（${Math.round(rowH)} / ${Math.round(textH)}）`);
 await page.getByRole('button', { name: /藍色包裝那款/ }).click();
 await page.locator('.ticket-view img').waitFor();
 check(true, '點小圖看大圖');

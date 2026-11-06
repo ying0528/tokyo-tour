@@ -247,6 +247,8 @@ alter table public.day_plans add column if not exists group_names jsonb not null
 -- 第三版：行程的地圖連結與其他連結（[{"label":"官網","url":"https://…"}]）
 alter table public.activities add column if not exists map_url text not null default '';
 alter table public.activities add column if not exists links jsonb not null default '[]'::jsonb;
+-- 第四版：行程的補充圖片（[{"id":"…","path":"旅行id/檔名"}]）
+alter table public.activities add column if not exists images jsonb not null default '[]'::jsonb;
 
 -- ---------- 個人狀態（可選的「已完成」）----------
 create table if not exists public.personal_status (

@@ -198,7 +198,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
           const on = done.has(item.id);
           const url = item.kind === 'link' ? safeUrl(item.url ?? '') : null;
           return (
-            <div key={item.id} className={`li${on ? ' done' : ''}`}>
+            <div key={item.id} className={`li${on ? ' done' : ''}${item.kind === 'image' ? ' image' : ''}`}>
               {url ? (
                 <a className="li-main" href={url} target="_blank" rel="noopener noreferrer"><Icon.link /><span>{item.text}</span><span className="li-ext" aria-hidden="true">↗</span></a>
               ) : item.kind === 'image' ? (

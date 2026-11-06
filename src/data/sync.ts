@@ -140,6 +140,7 @@ export class Syncer {
     const paths = [
       ...this.store.byTrip('tickets', tripId).map((t) => t.file_path),
       ...(this.store.get('trips', tripId)?.settings?.maps ?? []).map((m) => m.path),
+      ...this.store.byTrip('activities', tripId).flatMap((a) => (a.images ?? []).map((i) => i.path)),
       ...this.store.byTrip('lists', tripId).flatMap((l) => l.items.map((i) => (i.kind === 'image' ? i.path : null))),
     ].filter((p): p is string => Boolean(p) && !this.store.hasFile(p));
     for (const path of paths) {

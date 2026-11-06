@@ -40,6 +40,8 @@ export interface ActivityDraft {
   /** 地圖連結與其他連結 */
   map_url: string;
   links: NamedLink[];
+  /** 補充圖片（已存在的用 path；新選的用 blob，儲存時才存到手機） */
+  images: { id: string; path?: string; blob?: Blob }[];
 }
 
 export function emptyStep(mode: RouteMode = 'subway'): StepDraft {
@@ -70,6 +72,7 @@ export function draftFromActivity(store: LocalStore, a: Activity): ActivityDraft
     name: a.kind === 'move' ? '' : a.title.trim() || place?.name || '',
     from_name: a.from_name, to_name: a.to_name, steps: liveSteps(store, a.id).map(stepToDraft),
     map_url: a.map_url ?? '', links: (a.links ?? []).map((l) => ({ ...l })),
+    images: (a.images ?? []).map((x) => ({ ...x })),
   };
 }
 
@@ -129,6 +132,18 @@ export async function saveActivity(store: LocalStore, tripId: string, existingId
       .map((l) => ({ label: l.label.trim(), url: safeUrl(l.url) ?? '' }))
       .filter((l) => l.url),
   };
+
+  // 新選的圖片先存到手機，之後自動上傳
+  const images: { id: string; path: string }[] = [];
+  for (const img of d.images ?? []) {
+    if (img.path) images.push({ id: img.id, path: img.path });
+    else if (img.blob) {
+      const path = `${tripId}/act-${img.id}.${img.blob.type === 'image/png' ? 'png' : 'jpg'}`;
+      await store.saveFile(path, img.blob, true);
+      images.push({ id: img.id, path });
+    }
+  }
+  fields.images = images;
 
   let id: string;
   if (existing) {

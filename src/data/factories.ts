@@ -42,7 +42,7 @@ export function newActivity(tripId: string, fields: Partial<Activity> & Pick<Act
   return {
     ...base(), trip_id: tripId, start_time: null, duration_min: null, kind: 'sight', place_id: null,
     title: '', from_name: '', to_name: '', cost: null, currency: '', notes: '',
-    audience_groups: [], audience_travelers: [], map_url: '', links: [], ...fields,
+    audience_groups: [], audience_travelers: [], map_url: '', links: [], images: [], ...fields,
   };
 }
 
