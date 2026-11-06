@@ -128,8 +128,8 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
         right={canEdit ? <Button variant="ghost" onClick={() => navigate(`/t/${tripId}/a/${a.id}/edit`)}>編輯</Button> : null} />
     }>
       <div className="pad stack">
-        <div className="detail-hero" style={{ background: kind.bg }}>
-          {kind.short ? <span className="badge">{kind.label}</span> : null}
+        <div className="detail-hero" style={{ background: 'var(--surface)' }}>
+          {kind.short ? <span className="badge" style={{ background: kind.bg }}>{kind.label}</span> : null}
           <h1 className="detail-title">{name}</h1>
           {a.start_time ? <span className="num" style={{ fontSize: 24 }}>{hhmm(a.start_time)}</span> : null}
         </div>

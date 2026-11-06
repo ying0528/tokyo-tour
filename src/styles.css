@@ -248,7 +248,7 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .day-chip-n { font-family: var(--num); font-weight: 700; font-size: 15px; }
 .day-chip-d { font-size: 14px; }
 .day-chip.is-today { background: #fff8df; }
-.day-chip.is-on { background: var(--pink-strong); box-shadow: var(--pop); }
+.day-chip.is-on { background: #ffcf9e; box-shadow: var(--pop); }
 .day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .day-title { margin: 0; font-size: 24px; font-weight: 400; }
 
@@ -482,3 +482,5 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 /* 直的圖片：最多五倍欄高，完整顯示 */
 .li.image:has(.li-thumb.tall) { min-height: 280px; }
 .li.image .li-thumb.tall { height: 258px; max-width: 70%; }
+.act .kind-tag { border: 2px solid var(--ink); padding: 0 9px; }
+.act.flat .kind-tag { border-width: 1.5px; }

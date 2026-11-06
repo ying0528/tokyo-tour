@@ -43,7 +43,7 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
     <div className="pad stack">
       <div className="section-head">
         <h2 className="section-title">我的清單</h2>
-        <Button variant="primary" onClick={() => setAdding(true)} style={{ minHeight: 44 }}><Icon.plus /> 新增清單</Button>
+        <Button variant="ghost" onClick={() => setAdding(true)}><Icon.plus /> 新增清單</Button>
       </div>
       {mine.length ? mine.map((l) => {
         const done = checkedItems(store, l.id, user?.id);
@@ -214,7 +214,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
                 <a className="li-main" href={url} target="_blank" rel="noopener noreferrer"><Icon.link /><span>{item.text}</span><span className="li-ext" aria-hidden="true">↗</span></a>
               ) : item.kind === 'image' ? (
                 <button type="button" className="li-main" onClick={() => navigate(`/t/${tripId}/l/${list.id}/img/${item.id}`)}>
-                  <Thumb path={item.path} alt={item.text || '圖片'} />{item.text ? <span>{item.text}</span> : <span className="muted">圖片</span>}
+                  <Thumb path={item.path} alt={item.text || '圖片'} />{item.text ? <span>{item.text}</span> : null}
                 </button>
               ) : (
                 <span className="li-main">{item.text}</span>
@@ -244,7 +244,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
           {list.items.map((item, i) => (
             <div key={item.id} className="li">
               <button type="button" className="li-main" onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/${item.id}`); }}>
-                {item.kind === 'link' ? <Icon.link /> : item.kind === 'image' ? <Icon.camera /> : null}<span>{item.text || '圖片'}</span>
+                {item.kind === 'link' ? <Icon.link /> : null}{item.kind === 'image' ? <Thumb path={item.path} alt={item.text || '清單圖片'} /> : null}{item.text ? <span>{item.text}</span> : null}
               </button>
               <button type="button" className="icon-btn plain" aria-label="往上移" disabled={i === 0} onClick={() => moveListItem(store, list.id, item.id, -1)}><Icon.up /></button>
               <button type="button" className="icon-btn plain" aria-label="編輯" onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/${item.id}`); }}><Icon.edit /></button>
