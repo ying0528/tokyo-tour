@@ -368,10 +368,6 @@ export function ListItemForm({ tripId, listId, itemId }: { tripId: string; listI
             <Field label="網址" error={error && text.trim() ? error : null}>
               <input className="input" inputMode="url" value={url} enterKeyHint="done" placeholder="貼上網址 https://…" onChange={(e) => { setUrl(e.target.value); setError(null); }} />
             </Field>
-            <div className="stack-sm">
-              <span className="field-label">清單裡會長這樣：</span>
-              <div className="li"><span className="li-main"><Icon.link /><span>{text.trim() || '連結名稱'}</span><span className="li-ext">↗</span></span><span className="cb" aria-hidden="true" /></div>
-            </div>
           </>
         ) : (
           <>
