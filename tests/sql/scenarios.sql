@@ -154,6 +154,16 @@ select pg_temp.expect_error($$insert into public.lists (id, trip_id, owner_id, t
 select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
 select pg_temp.expect((select count(*) from public.list_checks) = 1, '每個人只看到自己的打勾');
 select pg_temp.expect_error($$update public.lists set owner_id = '11111111-1111-4111-8111-111111111111' where id = '99999999-0000-4000-8000-000000000001'$$, '不能把清單轉給別人');
+-- 與他人共用：共用的人可以改內容，但不能改分享、共用名單或刪除
+update public.lists set shared = false, editors = array['11111111-1111-4111-8111-111111111111']::uuid[] where id = '99999999-0000-4000-8000-000000000001';
+select set_config('request.jwt.claims', json_build_object('sub', :'owner')::text, false);
+select pg_temp.expect((select count(*) from public.lists) = 1, '共用的人看得到沒分享的清單');
+update public.lists set title = '一起買的' where id = '99999999-0000-4000-8000-000000000001';
+select pg_temp.expect((select title from public.lists) = '一起買的', '共用的人可以改清單內容');
+select pg_temp.expect_error($$update public.lists set shared = true where id = '99999999-0000-4000-8000-000000000001'$$, '共用的人不能改分享');
+select pg_temp.expect_error($$update public.lists set editors = '{}' where id = '99999999-0000-4000-8000-000000000001'$$, '共用的人不能改共用名單');
+select pg_temp.expect_error($$update public.lists set deleted_at = now() where id = '99999999-0000-4000-8000-000000000001'$$, '共用的人不能刪除清單');
+select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
 
 -- ===== 陌生人 =====
 select set_config('request.jwt.claims', json_build_object('sub', :'stranger')::text, false);

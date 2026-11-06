@@ -195,3 +195,21 @@ test('東京路線資料：方向、站數、轉乘', () => {
   assert.ok(transfersAt(d, byName(jk.id, '品川'), jk.id).some((l) => l.id === 'JR-East.Yamanote'), '品川可以轉山手線');
   assert.ok(sameStation(d, byName(jy.id, '品川'), byName(jk.id, '品川')));
 });
+
+test('清單與他人共用：兩邊都可以編輯，會同步', async () => {
+  const { a, b, mom, kid, trip, server } = await family();
+  const id = await createList(b.store, trip.id, kid.id, '一起買的', '🛍️');
+  await updateList(b.store, id, { editors: [mom.id] });
+  await b.syncer.sync();
+  await a.syncer.sync();
+  assert.equal(listsOf(a.store, trip.id, mom.id).mine.length, 1, '共用的清單出現在我的清單');
+  await saveListItem(a.store, id, null, { kind: 'text', text: '媽媽加的' });
+  await a.syncer.sync();
+  assert.equal(a.store.pending().length, 0, a.store.pending().map((e) => e.last_error).join());
+  await b.syncer.sync();
+  assert.deepEqual(b.store.get('lists', id)!.items.map((i) => i.text), ['媽媽加的']);
+  // 共用的人不能取消共用
+  await a.store.update('lists', id, { editors: [] });
+  await a.syncer.sync();
+  assert.deepEqual(server.data.tables.lists[id].editors, [mom.id]);
+});

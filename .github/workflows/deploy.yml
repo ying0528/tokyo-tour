@@ -74,7 +74,7 @@ jobs:
           v3a=$(curl -sS "$URL/rest/v1/activities?select=map_url,links&limit=1" -H "apikey: $KEY" || true)
           v3b=$(curl -sS "$URL/rest/v1/private_notes?select=id&limit=1" -H "apikey: $KEY" || true)
           case "$v3a$v3b" in \[*\]\[*) echo "✅ 第三版資料庫已更新（地圖連結、其他連結、私人備忘錄）";; *) echo "::error::資料庫還是舊版：請到 Supabase SQL Editor 再貼上執行一次 supabase/schema.sql（$v3a $v3b）"; ok=0;; esac
-          v4a=$(curl -sS "$URL/rest/v1/lists?select=id,items,shared&limit=1" -H "apikey: $KEY" || true)
+          v4a=$(curl -sS "$URL/rest/v1/lists?select=id,items,shared,editors&limit=1" -H "apikey: $KEY" || true)
           v4b=$(curl -sS "$URL/rest/v1/route_legs?select=id,steps&limit=1" -H "apikey: $KEY" || true)
           v4c=$(curl -sS "$URL/rest/v1/list_checks?select=id,pinned&limit=1" -H "apikey: $KEY" || true)
           v4d=$(curl -sS "$URL/rest/v1/activities?select=images,after_activity_id&limit=1" -H "apikey: $KEY" || true)

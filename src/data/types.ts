@@ -160,6 +160,8 @@ export interface TripList extends TripContent {
   shared: boolean;
   sort_order: number;
   items: ListItem[];
+  /** 與他人共用：這些人（user id）也可以編輯 */
+  editors: string[];
 }
 
 /** 清單打勾：每個人自己的 */

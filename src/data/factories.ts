@@ -73,7 +73,7 @@ export function newPrivateNote(tripId: string, activityId: string, userId: strin
 }
 
 export function newList(tripId: string, ownerId: string, fields: Partial<TripList> = {}): TripList {
-  return { ...base(), trip_id: tripId, owner_id: ownerId, title: '', icon: '', shared: false, sort_order: 0, items: [], ...fields };
+  return { ...base(), trip_id: tripId, owner_id: ownerId, title: '', icon: '', shared: false, sort_order: 0, items: [], editors: [], ...fields };
 }
 
 export function newListCheck(tripId: string, listId: string, userId: string, id: string, checked: string[]): ListCheck {

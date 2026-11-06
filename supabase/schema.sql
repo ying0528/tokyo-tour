@@ -303,6 +303,8 @@ create table if not exists public.lists (
   rev bigint not null default 0
 );
 create index if not exists lists_sync_idx on public.lists(trip_id, updated_at);
+-- 與他人共用：這些人也可以編輯（user id）
+alter table public.lists add column if not exists editors uuid[] not null default '{}';
 
 -- 清單打勾：每個人自己的，別人看不到（在別人分享的清單上打勾也不會影響對方）
 create table if not exists public.list_checks (
@@ -614,6 +616,12 @@ create or replace function public.tg_lock_owner() returns trigger
 language plpgsql as $$
 begin
   if new.owner_id is distinct from old.owner_id then raise exception '不能變更清單擁有者'; end if;
+  -- 共用的人可以改內容，但分享、共用名單、刪除只有擁有者能改
+  if old.owner_id is distinct from auth.uid() and (
+       new.shared is distinct from old.shared or new.editors is distinct from old.editors
+       or new.deleted_at is distinct from old.deleted_at) then
+    raise exception '只有建立清單的人可以改分享、共用或刪除';
+  end if;
   return new;
 end $$;
 drop trigger if exists lock_owner on public.lists;
@@ -621,14 +629,14 @@ create trigger lock_owner before update on public.lists
   for each row execute function public.tg_lock_owner();
 drop policy if exists lists_select on public.lists;
 create policy lists_select on public.lists for select to authenticated
-  using (public.is_member(trip_id) and (owner_id = auth.uid() or shared));
+  using (public.is_member(trip_id) and (owner_id = auth.uid() or shared or auth.uid() = any(editors)));
 drop policy if exists lists_insert on public.lists;
 create policy lists_insert on public.lists for insert to authenticated
   with check (owner_id = auth.uid() and public.is_member(trip_id));
 drop policy if exists lists_update on public.lists;
 create policy lists_update on public.lists for update to authenticated
-  using (owner_id = auth.uid() and public.is_member(trip_id))
-  with check (owner_id = auth.uid() and public.is_member(trip_id));
+  using ((owner_id = auth.uid() or auth.uid() = any(editors)) and public.is_member(trip_id))
+  with check ((owner_id = auth.uid() or auth.uid() = any(editors)) and public.is_member(trip_id));
 drop policy if exists lists_delete on public.lists;
 create policy lists_delete on public.lists for delete to authenticated
   using (owner_id = auth.uid());

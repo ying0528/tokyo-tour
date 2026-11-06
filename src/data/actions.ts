@@ -299,9 +299,10 @@ export async function saveTicket(store: LocalStore, tripId: string, existingId: 
 export function listsOf(store: LocalStore, tripId: string, userId: string | null | undefined): { mine: TripList[]; shared: TripList[] } {
   const all = store.byTrip('lists', tripId)
     .sort((a, b) => a.sort_order - b.sort_order || (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+  const mineOrShared = (l: TripList) => l.owner_id === userId || Boolean(userId && (l.editors ?? []).includes(userId));
   return {
-    mine: all.filter((l) => l.owner_id === userId),
-    shared: all.filter((l) => l.owner_id !== userId && l.shared),
+    mine: all.filter(mineOrShared),
+    shared: all.filter((l) => !mineOrShared(l) && l.shared),
   };
 }
 
@@ -312,7 +313,12 @@ export async function createList(store: LocalStore, tripId: string, userId: stri
   return (await store.create('lists', newList(tripId, userId, { title: t, icon, sort_order: order }))).id;
 }
 
-export async function updateList(store: LocalStore, listId: string, values: Partial<Pick<TripList, 'title' | 'icon' | 'shared'>>) {
+/** 能不能編輯這個清單（自己的，或別人跟我共用的） */
+export function canEditList(l: Pick<TripList, 'owner_id' | 'editors'> | undefined, userId: string | null | undefined): boolean {
+  return Boolean(l && userId && (l.owner_id === userId || (l.editors ?? []).includes(userId)));
+}
+
+export async function updateList(store: LocalStore, listId: string, values: Partial<Pick<TripList, 'title' | 'icon' | 'shared' | 'editors'>>) {
   if (values.title !== undefined && !values.title.trim()) throw new Error('請輸入清單名稱');
   await store.update('lists', listId, values.title !== undefined ? { ...values, title: values.title.trim() } : values);
 }

@@ -75,7 +75,7 @@ export class FakeServer {
     const trip = this.tripIdOf(table, row);
     if (!this.role(trip, user)) return false;
     if (table === 'private_notes' || table === 'list_checks') return row.user_id === user;
-    if (table === 'lists') return row.owner_id === user;
+    if (table === 'lists') return row.owner_id === user || ((row.editors as string[]) ?? []).includes(user ?? '');
     if (this.canEdit(trip, user)) return true;
     if (table === 'activities') {
       const groups = (row.audience_groups as string[]) ?? [];
@@ -93,7 +93,7 @@ export class FakeServer {
   canSee(table: TableName, row: Record<string, unknown>, user: string | null): boolean {
     if (!this.role(this.tripIdOf(table, row), user)) return false;
     if (table === 'private_notes' || table === 'list_checks') return row.user_id === user;
-    if (table === 'lists') return row.owner_id === user || Boolean(row.shared);
+    if (table === 'lists') return row.owner_id === user || Boolean(row.shared) || ((row.editors as string[]) ?? []).includes(user ?? '');
     return true;
   }
 
@@ -147,6 +147,9 @@ export class FakeServer {
         s.guard();
         const row = s.data.tables[table][id];
         if (!row || !s.canSee(table, row, uid())) return null;
+        if (table === 'lists' && row.owner_id !== uid() && ('shared' in patch || 'editors' in patch || 'deleted_at' in patch)) {
+          throw new RemoteError('permission', '只有建立清單的人可以改分享、共用或刪除');
+        }
         if (!s.canWrite(table, row, uid()) || !s.canWrite(table, { ...row, ...patch }, uid())) {
           if (table === 'private_notes' || table === 'list_checks' || table === 'lists') return null;
           throw new RemoteError('permission', '沒有權限（使用者只能改自己的內容）');
