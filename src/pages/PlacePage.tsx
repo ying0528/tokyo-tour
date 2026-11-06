@@ -60,7 +60,7 @@ export function PlacePage({ tripId, placeId }: { tripId: string; placeId: string
         ) : null}
         {p.notes.trim() ? <div className="info-row"><Icon.edit /><RichText text={p.notes} className="muted" /></div> : null}
         {map ? (
-          <a className="btn btn-block" style={{ background: 'var(--mint)', boxShadow: 'var(--pop)', minHeight: 56, fontSize: 18 }} href={map} target="_blank" rel="noopener noreferrer">
+          <a className="btn btn-block" style={{ background: 'var(--mint)', boxShadow: 'var(--pop)', minHeight: 56, fontSize: 19 }} href={map} target="_blank" rel="noopener noreferrer">
             <Icon.place /> {p.map_url && safeUrl(p.map_url) ? 'Naver Map 帶我去' : '在 Naver Map 搜尋'}
           </a>
         ) : null}

@@ -371,6 +371,20 @@ export function checkedItems(store: LocalStore, listId: string, userId: string |
   return new Set(c && !c.deleted_at ? c.checked : []);
 }
 
+/** 我有沒有釘選這個清單 */
+export function isPinned(store: LocalStore, listId: string, userId: string | null | undefined): boolean {
+  if (!userId) return false;
+  const c = store.get('list_checks', listCheckId(userId, listId));
+  return Boolean(c && !c.deleted_at && c.pinned);
+}
+
+export async function togglePin(store: LocalStore, tripId: string, listId: string, userId: string) {
+  const id = listCheckId(userId, listId);
+  const cur = store.get('list_checks', id);
+  if (cur) await store.update('list_checks', id, { pinned: !cur.pinned, deleted_at: null });
+  else await store.create('list_checks', { ...newListCheck(tripId, listId, userId, id, []), pinned: true });
+}
+
 export async function toggleListCheck(store: LocalStore, tripId: string, listId: string, userId: string, itemId: string) {
   const id = listCheckId(userId, listId);
   const cur = store.get('list_checks', id);

@@ -46,5 +46,11 @@ export const Icon = {
   download: () => <Svg size={16}><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></Svg>,
   money: () => <Svg><circle cx="12" cy="12" r="9" /><path d="M9 9l3 4 3-4M12 13v5M9 14h6" /></Svg>,
   home: () => <Svg><path d="M4 11l8-7 8 7v9H4z" /><path d="M10 20v-6h4v6" /></Svg>,
+  pin: ({ on }: { on?: boolean }) => (
+    <svg width={22} height={22} viewBox="0 0 24 24" fill={on ? '#e0303a' : 'none'} stroke={on ? '#8e1a20' : 'currentColor'} strokeWidth={1.8}
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      <path d="M9 3h6l-1 6 3 3H7l3-3-1-6Z" /><path d="M12 12v9" fill="none" />
+    </svg>
+  ),
   sparkle: () => <Svg size={40}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6" /></Svg>,
 };

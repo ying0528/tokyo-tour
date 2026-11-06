@@ -34,7 +34,7 @@ function StepEditor({ s, index, count, onChange, onMove, onRemove }: {
   return (
     <div className="step-editor">
       <div className="step-editor-head">
-        <span className="num" style={{ fontSize: 18 }}>第 {index + 1} 步</span>
+        <span className="num" style={{ fontSize: 19 }}>第 {index + 1} 步</span>
         <span className="spacer" />
         <button type="button" className="icon-btn plain" aria-label="往上移" disabled={index === 0} onClick={() => onMove(-1)}><Icon.up /></button>
         <button type="button" className="icon-btn plain" aria-label="往下移" disabled={index === count - 1} onClick={() => onMove(1)}><Icon.down /></button>

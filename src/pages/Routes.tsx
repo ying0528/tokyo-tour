@@ -94,7 +94,7 @@ export function StepChips({ steps }: { steps: LegStep[] }) {
 export function FlatLeg({ v, onClick }: { v: LegView; onClick: () => void }) {
   return (
     <button type="button" className="flat-leg" onClick={onClick} aria-label={`路線：${v.fromName} 到 ${v.toName}`}>
-      {v.leg?.start_time ? <span className="num" style={{ fontSize: 12 }}>{hhmm(v.leg.start_time)}</span> : <Icon.train />}
+      {v.leg?.start_time ? <span className="num" style={{ fontSize: 13 }}>{hhmm(v.leg.start_time)}</span> : <Icon.train />}
       <StepChips steps={v.leg?.steps ?? []} />
     </button>
   );
@@ -182,7 +182,7 @@ export function RoutesTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
                 onClick={() => navigate(`/t/${trip.id}/leg/${v.id}`)} onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/t/${trip.id}/leg/${v.id}`); }}>
                 <span style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                   {top}
-                  {can ? <button type="button" className="link-btn inline tiny muted" style={{ marginLeft: 'auto', fontSize: 12 }}
+                  {can ? <button type="button" className="link-btn inline tiny muted" style={{ marginLeft: 'auto', fontSize: 13 }}
                     onClick={(e) => { e.stopPropagation(); void dismiss(v); }}>不需要</button> : null}
                 </span>
                 <StepChips steps={v.leg!.steps} />
@@ -387,13 +387,13 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
             <div className="ride-end">
               <span className="lbl">上車</span>
               <span className="nm">{s.from_code ? <span className="st-code" style={{ ['--c' as string]: s.color }}>{s.from_code}</span> : null}<span>{s.from || '—'}</span></span>
-              {fromLink ? <a href={fromLink} target="_blank" rel="noopener noreferrer">{s.mode === 'bus' ? '站牌位置' : '車站地圖'}</a> : null}
+              {fromLink && s.mode === 'bus' ? <a href={fromLink} target="_blank" rel="noopener noreferrer">站牌位置</a> : null}
             </div>
-            <span aria-hidden="true" style={{ color: s.color || 'var(--ink)', fontSize: 20 }}>→</span>
+            <span aria-hidden="true" style={{ color: s.color || 'var(--ink)', fontSize: 21 }}>→</span>
             <div className="ride-end">
               <span className="lbl">下車</span>
               <span className="nm">{s.to_code ? <span className="st-code" style={{ ['--c' as string]: s.color }}>{s.to_code}</span> : null}<span>{s.to || '—'}</span></span>
-              {toLink ? <a href={toLink} target="_blank" rel="noopener noreferrer">{s.mode === 'bus' ? '站牌位置' : '車站地圖'}</a> : null}
+              {toLink && s.mode === 'bus' ? <a href={toLink} target="_blank" rel="noopener noreferrer">站牌位置</a> : null}
             </div>
           </div>
           {s.note ? <div className="ride-note">{s.note}</div> : null}
@@ -406,7 +406,7 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
         <div key={s.id} className="walk-card">
           <Icon.walk />
           <div className="walk-card-main">
-            <span style={{ fontSize: 16, color: 'var(--ink)' }}>步行</span>
+            <span style={{ fontSize: 17, color: 'var(--ink)' }}>步行</span>
             <span>{w.fromLabel} → {w.toLabel}</span>
             {s.note ? <span>{s.note}</span> : null}
           </div>
@@ -426,7 +426,7 @@ export function LegPage({ tripId, legId }: { tripId: string; legId: string }) {
       right={can ? <Button variant="ghost" onClick={() => navigate(`/t/${tripId}/leg/${leg.id}/edit`)}>編輯</Button> : null} />}>
       <div className="pad stack">
         <div className="card stack-sm" style={{ background: 'var(--grey)' }}>
-          <div className="row-wrap" style={{ fontSize: 18 }}><span>{fromName}</span><span aria-hidden="true">→</span><span>{toName}</span></div>
+          <div className="row-wrap" style={{ fontSize: 19 }}><span>{fromName}</span><span aria-hidden="true">→</span><span>{toName}</span></div>
           {timeLine ? <span className="small muted">{timeLine}</span> : null}
         </div>
         {plans.length > 1 ? (
@@ -694,7 +694,7 @@ export function LegForm({ tripId, legId }: { tripId: string; legId: string }) {
         {steps.map((s, i) => (
           <div key={s.id} className="step-editor">
             <div className="step-editor-head">
-              <span className="num" style={{ fontSize: 18 }}>第 {i + 1} 步</span>
+              <span className="num" style={{ fontSize: 19 }}>第 {i + 1} 步</span>
               <span className="spacer" />
               <button type="button" className="icon-btn plain" aria-label="往上移" disabled={i === 0} onClick={() => move(i, -1)}><Icon.up /></button>
               <button type="button" className="icon-btn plain" aria-label="往下移" disabled={i === steps.length - 1} onClick={() => move(i, 1)}><Icon.down /></button>
@@ -826,7 +826,7 @@ function RailPicker({ s, rail, onChange }: { s: LegStep; rail: RailData; onChang
                 {stations.map((id) => <option key={id} value={id}>{[codeAt(line, id), rail.stations[id]?.n].filter(Boolean).join(' ')}</option>)}
               </select>
             </div>
-            <span aria-hidden="true" style={{ paddingBottom: 14, color: line.color, fontSize: 20 }}>→</span>
+            <span aria-hidden="true" style={{ paddingBottom: 14, color: line.color, fontSize: 21 }}>→</span>
             <div className="field">
               <label className="field-label" htmlFor={`${s.id}-to`}>下車站</label>
               <select id={`${s.id}-to`} className="input" value={s.to_station ?? ''} onChange={(e) => pickStation('to', e.target.value)}>
@@ -838,7 +838,6 @@ function RailPicker({ s, rail, onChange }: { s: LegStep; rail: RailData; onChang
           {path && path.stops > 0 ? (
             <div className="auto-note"><Icon.check />自動算好：{path.direction}・{path.stops} 站</div>
           ) : s.from_station && s.to_station ? <p className="field-error">上車站和下車站一樣</p> : null}
-          <span className="field-hint">車站位置連結會自動帶入。</span>
         </>
       ) : null}
       <button type="button" className="link-btn" style={{ alignSelf: 'flex-start' }} onClick={() => { setManual(true); onChange({ line_id: undefined, color: undefined, code: undefined, from_station: undefined, to_station: undefined, from_code: undefined, to_code: undefined }); }}>
@@ -858,7 +857,7 @@ function LinePickerSheet({ rail, current, onPick, onClose }: { rail: RailData; c
       <label className="input-row input" style={{ borderRadius: 999, minHeight: 48, padding: '0 14px' }}>
         <Icon.search />
         <input type="search" value={q} autoFocus placeholder="搜尋路線或車站，例如：澀谷" aria-label="搜尋路線或車站"
-          style={{ flex: '1 1 auto', minWidth: 0, border: 0, outline: 'none', background: 'transparent', fontSize: 16 }} onChange={(e) => setQ(e.target.value)} />
+          style={{ flex: '1 1 auto', minWidth: 0, border: 0, outline: 'none', background: 'transparent', fontSize: 17 }} onChange={(e) => setQ(e.target.value)} />
       </label>
       {!q.trim() ? <span className="section-title">常用路線在最前面</span> : null}
       <div className="line-grid">

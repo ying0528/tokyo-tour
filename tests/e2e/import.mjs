@@ -3,7 +3,7 @@
 import { chromium, devices } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const [url = 'http://localhost:4173/', out = 'screenshots', file] = process.argv.slice(2);
+const [url = 'http://localhost:4173/', out = 'screenshots', file, file2] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();
 const context = await browser.newContext({ ...devices['iPhone 13'], locale: 'zh-TW', timezoneId: 'Asia/Tokyo', deviceScaleFactor: 2 });
@@ -92,6 +92,22 @@ await page.getByRole('button', { name: '看完整地鐵圖' }).click();
 check(await page.getByText('東京地鐵路線圖（Metro・都營）').first().isVisible(), '地鐵路線圖放進完整路線圖');
 await page.getByRole('button', { name: '關閉' }).click();
 
+if (file2) {
+  await tab('旅伴・設定').click();
+  await page.getByLabel('選擇行程檔').setInputFiles(file2);
+  await page.getByText(/換成新版/).waitFor();
+  await page.getByRole('button', { name: '匯入', exact: true }).click();
+  await page.getByRole('tab', { name: /Day 1/ }).click();
+  await page.locator('.act-title').first().waitFor();
+  const t = await titles();
+  check(t.includes('飯店') && !t.some((x) => x.includes('HOTEL METS')) && t.filter((x) => x === '六本木 藍瓶咖啡').length === 1, `換成新版：飯店、沒有重複（${t.join('、')}）`);
+  await page.locator('.act', { hasText: '飯店' }).click();
+  check((await page.locator('body').innerText()).includes('JR東日本 HOTEL METS 大森'), '飯店的補充說明寫 JR東日本 HOTEL METS 大森');
+  await page.getByRole('button', { name: '返回' }).click();
+  await page.locator('.flat-leg').first().click();
+  check(!(await page.locator('body').innerText()).includes('車站地圖'), '地鐵步驟沒有車站地圖連結');
+  await shot('新版-一段路線');
+}
 console.log(errors.length ? `錯誤：${errors.join('\n')}` : '沒有頁面錯誤');
 await browser.close();
 if (errors.length) process.exit(1);

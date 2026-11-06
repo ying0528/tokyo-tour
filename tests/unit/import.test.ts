@@ -68,3 +68,24 @@ test('匯入行程檔：行程、分組、路線、方案、圖片', async () =>
   assert.equal(after.steps[0].id, 'b');
   assert.equal(after.start_time, '13:30');
 });
+
+test('新版行程檔：先把舊版匯入的行程移到回收桶再放入', async () => {
+  const { store, tripId } = await setup();
+  const v1: ImportFile = {
+    format: 'family-trip-import', version: 1, id: 'v1', title: 'x', start_date: '2026-11-21', end_date: '2026-11-27',
+    activities: [{ key: 'h', date: '2026-11-21', time: '15:00', kind: 'lodging', title: 'JR東日本 HOTEL METS 大森' }, { key: 'm', date: '2026-11-21', time: '16:00', kind: 'food', title: '藍瓶咖啡' }],
+    legs: [{ date: '2026-11-22', from: null, from_name: 'JR東日本 HOTEL METS 大森', to: null, to_name: '小網神社', plans: [] }],
+  };
+  await importIntoTrip(store, tripId, v1);
+  await store.create('activities', newActivity(tripId, { date: '2026-11-21', start_time: '20:00', title: '自己加的' }));
+  const v2: ImportFile = {
+    ...v1, id: 'v2',
+    replaces: { id: 'v1', activities: v1.activities.map((a) => ({ date: a.date, title: a.title, time: a.time })), legs: [{ date: '2026-11-22', from_name: 'JR東日本 HOTEL METS 大森', to_name: '小網神社' }] },
+    activities: [{ key: 'h', date: '2026-11-21', time: '15:00', kind: 'lodging', title: '飯店' }, { key: 'm', date: '2026-11-21', time: '16:00', kind: 'food', title: '藍瓶咖啡' }],
+    legs: [{ date: '2026-11-22', from: null, from_name: '飯店', to: null, to_name: '小網神社', plans: [] }],
+  };
+  const r = await importIntoTrip(store, tripId, v2);
+  assert.equal(r.replaced, 2);
+  assert.deepEqual(sortActivities(store.byTrip('activities', tripId)).map((a) => a.title), ['飯店', '藍瓶咖啡', '自己加的']);
+  assert.deepEqual(store.byTrip('route_legs', tripId).map((l) => l.from_name), ['飯店']);
+});

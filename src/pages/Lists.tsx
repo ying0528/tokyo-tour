@@ -4,7 +4,7 @@ import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
 import type { TripCtx } from '../app/tripContext.ts';
 import {
-  checkedItems, createList, deleteListItem, listsOf, moveListItem, saveListItem, toggleListCheck, updateList, validateListItem,
+  checkedItems, createList, deleteListItem, isPinned, listsOf, moveListItem, saveListItem, toggleListCheck, togglePin, updateList, validateListItem,
 } from '../data/actions.ts';
 import type { ListItem, TripList } from '../data/types.ts';
 import { safeUrl } from '../lib/links.ts';
@@ -34,7 +34,9 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
   useData();
   const { user } = useSession();
   const [adding, setAdding] = useState(false);
-  const { mine, shared } = listsOf(store, ctx.trip.id, user?.id);
+  const { mine, shared: sharedAll } = listsOf(store, ctx.trip.id, user?.id);
+  // 釘選的排最上面
+  const shared = [...sharedAll.filter((l) => isPinned(store, l.id, user?.id)), ...sharedAll.filter((l) => !isPinned(store, l.id, user?.id))];
   const open = (l: TripList) => navigate(`/t/${ctx.trip.id}/l/${l.id}`);
 
   return (
@@ -64,15 +66,22 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
       <h2 className="section-title">看看別人分享的清單</h2>
       {shared.length ? shared.map((l) => {
         const o = ownerOf(ctx.trip.id, l.owner_id);
+        const pinned = isPinned(store, l.id, user?.id);
         return (
-          <button key={l.id} type="button" className="list-card other" onClick={() => open(l)}>
-            <span className="list-ic" style={{ background: iconBg(l) }} aria-hidden="true">{l.icon || '📝'}</span>
-            <span className="list-card-main">
-              <span className="list-card-title">{l.title}</span>
-              <span className="list-card-sub">{l.items.length} 項</span>
-            </span>
-            <span className="who"><Dot color={o.color} />{o.name}分享</span>
-          </button>
+          <div key={l.id} className="list-card other">
+            <button type="button" className="list-card-open" onClick={() => open(l)}>
+              <span className="list-ic" style={{ background: iconBg(l) }} aria-hidden="true">{l.icon || '📝'}</span>
+              <span className="list-card-main">
+                <span className="list-card-title">{l.title}</span>
+                <span className="list-card-sub">{l.items.length} 項</span>
+              </span>
+              <span className="who"><Dot color={o.color} />{o.name}分享</span>
+            </button>
+            <button type="button" className={`pin-btn${pinned ? ' on' : ''}`} aria-pressed={pinned} aria-label={pinned ? `取消釘選「${l.title}」` : `釘選「${l.title}」`}
+              onClick={() => { if (user) void togglePin(store, ctx.trip.id, l.id, user.id).then(() => toast(pinned ? '已取消釘選' : '已釘選，會排在最上面')); }}>
+              <Icon.pin on={pinned} />
+            </button>
+          </div>
         );
       }) : <p className="muted small">家人分享清單後會出現在這裡。</p>}
 
@@ -125,7 +134,9 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
 /** 清單裡的小圖 */
 function Thumb({ path, alt }: { path?: string; alt: string }) {
   const f = useFileUrl(path);
-  return f.url ? <img className="li-thumb" src={f.url} alt={alt} /> : <span className="li-thumb empty" aria-hidden="true">{f.state === 'loading' ? '…' : '🖼'}</span>;
+  const [tall, setTall] = useState(false);
+  return f.url ? <img className={`li-thumb${tall ? ' tall' : ''}`} src={f.url} alt={alt}
+    onLoad={(e) => { const im = e.currentTarget; setTall(im.naturalHeight > im.naturalWidth * 1.1); }} /> : <span className="li-thumb empty" aria-hidden="true">{f.state === 'loading' ? '…' : '🖼'}</span>;
 }
 
 export function ListImagePage({ tripId, listId, itemId }: { tripId: string; listId: string; itemId: string }) {
@@ -185,7 +196,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
         <div className="row-wrap" style={{ gap: 12, marginBottom: 6, flexWrap: 'nowrap' }}>
           <span className="list-ic lg" style={{ background: iconBg(list) }} aria-hidden="true">{list.icon || '📝'}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-            <h1 className="detail-title" style={{ fontSize: 24, textAlign: 'left' }}>{list.title}</h1>
+            <h1 className="detail-title" style={{ fontSize: 26, textAlign: 'left' }}>{list.title}</h1>
             {mine ? (
               <span className="muted tiny">{list.items.length} 項{n ? `・買到 ${n} 項` : ''}・{list.shared ? '已分享給大家' : '只有我看得到'}</span>
             ) : (

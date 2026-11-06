@@ -110,7 +110,7 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
         <div className="day-bar">
           <div className="bubble" aria-live="polite">{reminder}</div>
           {ctx.editable ? (
-            <button type="button" className="btn btn-secondary" style={{ minHeight: 44, padding: '0 12px', fontSize: 14, flex: '0 0 auto', alignSelf: 'center' }}
+            <button type="button" className="btn btn-secondary" style={{ minHeight: 44, padding: '0 12px', fontSize: 15, flex: '0 0 auto', alignSelf: 'center' }}
               onClick={() => navigate(`/t/${trip.id}/day/${selected}`)}>
               {view.split ? '分組設定' : '這天設定'}
             </button>

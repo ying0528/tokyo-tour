@@ -167,6 +167,8 @@ export interface ListCheck extends TripContent {
   list_id: string;
   user_id: string;
   checked: string[];
+  /** 釘選在「別人分享的清單」最上面 */
+  pinned: boolean;
 }
 
 export type LegMode = 'rail' | 'bus' | 'walk' | 'other';

@@ -10,7 +10,7 @@ import { useSyncSummary } from '../ui/SyncBadge.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
 import { RichText } from '../ui/RichText.tsx';
 import { downloadBackup } from './CopyTripPage.tsx';
-import { alreadyImported, importIntoTrip, importSummary, parseImport } from '../data/importer.ts';
+import { alreadyImported, importIntoTrip, importSummary, parseImport, replacedActivities } from '../data/importer.ts';
 
 export function SettingsTab({ trip }: { trip: Trip }) {
   useData();
@@ -46,15 +46,18 @@ export function SettingsTab({ trip }: { trip: Trip }) {
       const d = parseImport(await file.text());
       const sum = importSummary(d);
       const again = alreadyImported(trip.settings, d.id);
+      const old = again ? [] : replacedActivities(store, trip.id, d);
       const ok = await confirmDialog({
-        title: again ? '這份行程檔已經匯入過，要再匯入一次嗎？' : `匯入「${d.title}」？`,
-        message: again ? '再匯入一次，行程會重複出現。' : `會加入 ${sum.days} 天、${sum.activities} 個行程、${sum.legs} 段路線、${sum.images} 張圖片${sum.groups ? `，以及 ${sum.groups} 天的分組` : ''}。原本的行程不會被刪除。`,
+        title: again ? '這份行程檔已經匯入過，要再匯入一次嗎？' : old.length ? `換成新版「${d.title}」？` : `匯入「${d.title}」？`,
+        message: again ? '再匯入一次，行程會重複出現。' : old.length
+          ? `會先把上一版匯入的 ${old.length} 個行程和它們的路線移到回收桶（你自己新增或改過名稱的不受影響），再放入新版 ${sum.activities} 個行程、${sum.legs} 段路線。`
+          : `會加入 ${sum.days} 天、${sum.activities} 個行程、${sum.legs} 段路線、${sum.images} 張圖片${sum.groups ? `，以及 ${sum.groups} 天的分組` : ''}。原本的行程不會被刪除。`,
         confirmText: '匯入',
         danger: again,
       });
       if (!ok) return;
       const r = await importIntoTrip(store, trip.id, d);
-      toast(`已匯入 ${r.activities} 個行程${r.addedTravelers.length ? `，新增同行者：${r.addedTravelers.join('、')}` : ''}`);
+      toast(`${r.replaced ? `已換成新版，` : '已匯入 '}${r.activities} 個行程${r.addedTravelers.length ? `，新增同行者：${r.addedTravelers.join('、')}` : ''}`);
       navigate(`/t/${trip.id}/plan/${trip.start_date}`);
     } catch (e) {
       toast((e as Error).message, 'error');

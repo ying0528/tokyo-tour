@@ -77,7 +77,7 @@ export function newList(tripId: string, ownerId: string, fields: Partial<TripLis
 }
 
 export function newListCheck(tripId: string, listId: string, userId: string, id: string, checked: string[]): ListCheck {
-  return { ...base(), id, trip_id: tripId, list_id: listId, user_id: userId, checked };
+  return { ...base(), id, trip_id: tripId, list_id: listId, user_id: userId, checked, pinned: false };
 }
 
 export function newLeg(tripId: string, fields: Partial<RouteLeg> & Pick<RouteLeg, 'date'>): RouteLeg {

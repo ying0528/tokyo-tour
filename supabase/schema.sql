@@ -318,6 +318,8 @@ create table if not exists public.list_checks (
   rev bigint not null default 0
 );
 create index if not exists list_checks_sync_idx on public.list_checks(trip_id, updated_at);
+-- 釘選別人分享的清單（只有自己看得到）
+alter table public.list_checks add column if not exists pinned boolean not null default false;
 
 -- ---------- 第四版：路線（行程與行程之間怎麼走）----------
 -- 每天（分組的日子每組）相鄰兩個行程之間是一段；steps：

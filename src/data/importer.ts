@@ -1,6 +1,6 @@
 // 匯入行程檔：把整理好的行程（含補充圖片、分組、路線）一次放進目前這趟旅行
 import type { LocalStore } from './store.ts';
-import type { ActivityKind, DayPlan, LegPlan, NamedLink } from './types.ts';
+import type { Activity, ActivityKind, DayPlan, LegPlan, NamedLink } from './types.ts';
 import { newActivity, newLeg, newTraveler } from './factories.ts';
 import { saveDayPlan } from './actions.ts';
 import { legId } from '../lib/legs.ts';
@@ -14,6 +14,12 @@ export interface ImportFile {
   version: 1;
   /** 這份檔案的代號（避免重複匯入） */
   id: string;
+  /** 新版行程檔：匯入過舊版的話，先把舊版的行程移到回收桶 */
+  replaces?: {
+    id: string;
+    activities: { date: string; title: string; time: string | null }[];
+    legs: { date: string; from_name: string; to_name: string }[];
+  };
   title: string;
   start_date: string;
   end_date: string;
@@ -77,10 +83,36 @@ function dataUrlToBlob(url: string): Blob {
   return new Blob([bytes], { type: m[1] });
 }
 
+/** 匯入過的舊版行程中，還在這趟旅行裡的（標題、日期、時間都一樣才算） */
+export function replacedActivities(store: LocalStore, tripId: string, d: ImportFile) {
+  const trip = store.get('trips', tripId);
+  if (!d.replaces || !alreadyImported(trip?.settings, d.replaces.id)) return [];
+  const acts = store.byTrip('activities', tripId);
+  const out: Activity[] = [];
+  for (const sig of d.replaces.activities) {
+    const a = acts.find((x) => x.date === sig.date && x.title.trim() === sig.title.trim()
+      && (x.start_time ? x.start_time.slice(0, 5) : null) === (sig.time ?? null) && !out.includes(x));
+    if (a) out.push(a);
+  }
+  return out;
+}
+
 /** 匯入到目前這趟旅行，回傳新增的行程數 */
-export async function importIntoTrip(store: LocalStore, tripId: string, d: ImportFile): Promise<{ activities: number; addedTravelers: string[] }> {
+export async function importIntoTrip(store: LocalStore, tripId: string, d: ImportFile): Promise<{ activities: number; addedTravelers: string[]; replaced: number }> {
   const trip = store.get('trips', tripId);
   if (!trip) throw new Error('找不到這趟旅行');
+
+  // 換成新版：舊版匯入的行程與路線移到回收桶
+  const old = replacedActivities(store, tripId, d);
+  if (old.length) {
+    const gone = new Set(old.map((a) => a.id));
+    for (const a of old) await store.softDelete('activities', a.id);
+    for (const l of store.byTrip('route_legs', tripId)) {
+      const linked = (l.from_activity_id && gone.has(l.from_activity_id)) || (l.to_activity_id && gone.has(l.to_activity_id));
+      const named = d.replaces!.legs.some((x) => x.date === l.date && x.from_name === l.from_name && x.to_name === l.to_name);
+      if (linked || (l.custom && named)) await store.softDelete('route_legs', l.id);
+    }
+  }
 
   // 同行者：用名字對應（大小寫不分），沒有的就新增
   const travelers = store.byTrip('travelers', tripId);
@@ -150,11 +182,11 @@ export async function importIntoTrip(store: LocalStore, tripId: string, d: Impor
   const maps = [...(trip.settings?.maps ?? [])];
   for (const m of d.maps ?? []) {
     const path = paths.get(m.image);
-    if (path && !maps.some((x) => x.path === path)) maps.push({ id: crypto.randomUUID(), label: m.label, path });
+    if (path && !maps.some((x) => x.path === path || x.label === m.label)) maps.push({ id: crypto.randomUUID(), label: m.label, path });
   }
   const imports = [...(trip.settings?.imports ?? []), d.id];
   await store.update('trips', tripId, { settings: { ...trip.settings, maps, imports } });
-  return { activities: d.activities.length, addedTravelers };
+  return { activities: d.activities.length, addedTravelers, replaced: old.length };
 }
 
 export function alreadyImported(settings: { imports?: string[] } | undefined, id: string): boolean {

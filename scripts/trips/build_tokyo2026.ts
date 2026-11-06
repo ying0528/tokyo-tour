@@ -35,13 +35,15 @@ const walk = (note = '', from = '', to = ''): LegStep => ({ id: sid(), mode: 'wa
 const plan = (label: string, steps: LegStep[]): LegPlan => ({ id: sid(), label, steps });
 const img = (name: string) => `data:image/jpeg;base64,${readFileSync(path.join(imgDir, `${name}.jpg`)).toString('base64')}`;
 
-const HOTEL = 'JR東日本 HOTEL METS 大森';
+const HOTEL = '飯店';
 const TODAY_BUY = { kind: 'sight' as const, title: '超市、便利商店買隔天早餐', notes: '超市 21:00 關' };
 
 const data: ImportFile = {
   format: 'family-trip-import',
   version: 1,
-  id: 'tokyo-ginkgo-2026-v1',
+  id: 'tokyo-ginkgo-2026-v2',
+  // 匯入過第一版的話，先把第一版的行程移到回收桶再放入新版
+  replaces: JSON.parse(readFileSync(new URL('./tokyo2026-v1-signature.json', import.meta.url), 'utf8')),
   title: '2026 東京銀杏奢華之旅',
   start_date: '2026-11-21',
   end_date: '2026-11-27',
@@ -55,7 +57,7 @@ const data: ImportFile = {
     { key: 'd1a', date: '2026-11-21', time: '09:00', kind: 'other', title: '華航 CI220 松山機場出發', notes: '松山 → 羽田' },
     { key: 'd1b', date: '2026-11-21', time: '12:50', kind: 'other', title: '抵達羽田機場', notes: '羽田機場第 3 航廈\n到飯店的轉乘有兩個方案（路線頁可以切換），下圖是查到的班次', images: ['d1_routes'] },
     { key: 'd1c', date: '2026-11-21', time: '15:00', kind: 'lodging', title: HOTEL,
-      notes: 'JR 大森站中央檢票口步行 1 分鐘\n飯店樓下有 7-11（3 分鐘）、Lawson（5 分鐘）\n早餐兌換券三選一：\n・STARBUCKS（Atre 大森 5 樓）\n・Grandeal（Atre 大森 3 樓）\n・TULLY\'S COFFEE（Atre 大森 1 樓）' },
+      notes: 'JR東日本 HOTEL METS 大森\nJR 大森站中央檢票口步行 1 分鐘\n飯店樓下有 7-11（3 分鐘）、Lawson（5 分鐘）\n早餐兌換券三選一：\n・STARBUCKS（Atre 大森 5 樓）\n・Grandeal（Atre 大森 3 樓）\n・TULLY\'S COFFEE（Atre 大森 1 樓）' },
     { key: 'd1d', date: '2026-11-21', time: '16:00', kind: 'food', title: '六本木 藍瓶咖啡' },
     { key: 'd1e', date: '2026-11-21', time: null, after: 'd1d', kind: 'food', title: '六本木 烏龍麵 TsuruTonTan' },
     { key: 'd1f', date: '2026-11-21', time: '18:30', kind: 'sight', title: '六本木之丘聖誕點燈・聖誕市集',

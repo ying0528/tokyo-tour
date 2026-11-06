@@ -76,7 +76,7 @@ jobs:
           case "$v3a$v3b" in \[*\]\[*) echo "✅ 第三版資料庫已更新（地圖連結、其他連結、私人備忘錄）";; *) echo "::error::資料庫還是舊版：請到 Supabase SQL Editor 再貼上執行一次 supabase/schema.sql（$v3a $v3b）"; ok=0;; esac
           v4a=$(curl -sS "$URL/rest/v1/lists?select=id,items,shared&limit=1" -H "apikey: $KEY" || true)
           v4b=$(curl -sS "$URL/rest/v1/route_legs?select=id,steps&limit=1" -H "apikey: $KEY" || true)
-          v4c=$(curl -sS "$URL/rest/v1/list_checks?select=id&limit=1" -H "apikey: $KEY" || true)
+          v4c=$(curl -sS "$URL/rest/v1/list_checks?select=id,pinned&limit=1" -H "apikey: $KEY" || true)
           v4d=$(curl -sS "$URL/rest/v1/activities?select=images,after_activity_id&limit=1" -H "apikey: $KEY" || true)
           v4e=$(curl -sS "$URL/rest/v1/route_legs?select=plans&limit=1" -H "apikey: $KEY" || true)
           case "$v4a$v4b$v4c$v4d$v4e" in \[*\]\[*\]\[*\]\[*\]\[*) echo "✅ 第四版資料庫已更新（清單、路線方案、行程補充圖片、沒時間的排序）";; *) echo "::error::資料庫還是舊版：請到 Supabase SQL Editor 再貼上執行一次 supabase/schema.sql（$v4a $v4b $v4c $v4d $v4e）"; ok=0;; esac
