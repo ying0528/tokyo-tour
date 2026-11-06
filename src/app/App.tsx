@@ -21,7 +21,6 @@ import { ListImagePage, ListItemForm, ListPage } from '../pages/Lists.tsx';
 import { LegForm, LegPage, MapViewPage } from '../pages/Routes.tsx';
 import { TicketForm, TicketPage } from '../pages/TicketPage.tsx';
 import { CopyTripPage } from '../pages/CopyTripPage.tsx';
-import { Mascot } from '../ui/Mascot.tsx';
 
 const TAB_KEYS: TabKey[] = ['plan', 'lists', 'routes', 'tickets', 'settings'];
 let openedLastTrip = false;
@@ -101,7 +100,7 @@ export function App() {
   let content: ReactNode;
   if (!backend.configured) content = <SetupNeededPage />;
   else if (error) content = <div className="boot-error">無法開啟手機上的資料：{error}<br />請確認沒有使用無痕模式。</div>;
-  else if (!ready) content = <div className="boot"><Mascot size={80} />家庭旅行</div>;
+  else if (!ready) content = <div className="boot"><img src="./icon.svg" width={88} height={88} alt="" />家庭旅行</div>;
   else content = <Routes />;
 
   return (
