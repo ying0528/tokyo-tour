@@ -53,3 +53,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: 在暫時的 PostgreSQL 跑 schema.sql 與權限測試
         run: PGBIN="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" bash tests/sql/run.sh
+
+  supabase:
+    name: 檢查 Supabase 設定
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 連線、資料表、登入設定
+        run: |
+          URL=$(node -p "require('./app.config.json').supabaseUrl")
+          KEY=$(node -p "require('./app.config.json').supabaseKey")
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "::warning::尚未設定 app.config.json"; exit 0; fi
+          ok=1
+          ping=$(curl -sS -X POST "$URL/rest/v1/rpc/ping" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{}' || true)
+          echo "ping: $ping"
+          if [ "$ping" = '"ok"' ]; then echo "✅ 資料庫連線正常，schema.sql 已套用"; else echo "::error::資料庫連不上或 schema.sql 沒有成功執行：$ping"; ok=0; fi
+          trips=$(curl -sS "$URL/rest/v1/trips?select=id&limit=1" -H "apikey: $KEY" || true)
+          echo "trips: $trips"
+          case "$trips" in \[*) echo "✅ 資料表存在，且未登入的人看不到資料";; *) echo "::error::讀取 trips 資料表失敗：$trips"; ok=0;; esac
+          settings=$(curl -sS "$URL/auth/v1/settings" -H "apikey: $KEY" || true)
+          echo "$settings" | node -e '
+            const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const anon = s.external?.anonymous_users ?? s.anonymous_users;
+            console.log(s.external?.email ? "✅ Email 登入已開啟" : "::error::Email 登入沒有開啟");
+            console.log(anon ? "✅ 匿名登入已開啟（家人免註冊）" : "::error::匿名登入沒有開啟：Authentication → Sign In / Providers → Allow anonymous sign-ins");
+            console.log(s.disable_signup ? "::error::目前關閉了註冊（Allow new users to sign up）" : "✅ 允許註冊");
+            console.log(s.mailer_autoconfirm ? "ℹ️ 註冊不需要點確認信" : "ℹ️ 註冊後需要到信箱點確認信");
+            if (!s.external?.email || !anon || s.disable_signup) process.exit(1);
+          ' || ok=0
+          [ "$ok" = 1 ]
