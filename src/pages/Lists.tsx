@@ -23,9 +23,18 @@ function iconBg(l: TripList) {
   return BGS[i % BGS.length];
 }
 
+/** 共用的人裡，現在還是這趟旅行成員的（測試時加過、後來移除的手機不算） */
+function editorsOf(tripId: string, l: TripList): string[] {
+  const ids = l.editors ?? [];
+  const members = store.members(tripId);
+  if (!members.length) return ids; // 還沒抓到成員名單時先照原本的
+  const now = new Set(members.map((m) => m.user_id));
+  return ids.filter((u) => now.has(u) && u !== l.owner_id);
+}
+
 /** 這個清單的人：擁有者＋共用的人，例如「大酷/Fisher」 */
 function peopleOf(tripId: string, l: TripList): string {
-  return [l.owner_id, ...(l.editors ?? [])].map((u) => ownerOf(tripId, u).name).join('/');
+  return [...new Set([l.owner_id, ...editorsOf(tripId, l)])].map((u) => ownerOf(tripId, u).name).join('/');
 }
 
 /** 清單擁有者：用他選的「我是誰」顯示名字和顏色 */
@@ -61,8 +70,8 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
               <span className="list-card-sub">{l.items.length} 項{n ? `・買到 ${n} 項` : ''}</span>
             </span>
             <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              <span className={`chip-soft${l.shared ? ' ok' : ''}`}>{l.shared ? '已分享' : (l.editors ?? []).length || l.owner_id !== user?.id ? '共用' : '只有我看得到'}</span>
-              {(l.editors ?? []).length || l.owner_id !== user?.id ? <span className="list-card-sub">{peopleOf(ctx.trip.id, l)}</span> : null}
+              <span className={`chip-soft${l.shared ? ' ok' : ''}`}>{l.shared ? '已分享' : editorsOf(ctx.trip.id, l).length || l.owner_id !== user?.id ? '共用' : '只有我看得到'}</span>
+              {editorsOf(ctx.trip.id, l).length || l.owner_id !== user?.id ? <span className="list-card-sub">{peopleOf(ctx.trip.id, l)}</span> : null}
             </span>
           </button>
         );
@@ -208,7 +217,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <h1 className="detail-title" style={{ fontSize: 26, textAlign: 'left' }}>{list.title}</h1>
             {mine ? (
-              <span className="muted tiny">{list.items.length} 項{n ? `・買到 ${n} 項` : ''}・{(list.editors ?? []).length ? `${peopleOf(tripId, list)} 共用` : '只有我看得到'}{list.shared ? '・已分享給大家' : ''}</span>
+              <span className="muted tiny">{list.items.length} 項{n ? `・買到 ${n} 項` : ''}・{editorsOf(tripId, list).length ? `${peopleOf(tripId, list)} 共用` : '只有我看得到'}{list.shared ? '・已分享給大家' : ''}</span>
             ) : (
               <span className="who" style={{ alignSelf: 'flex-start' }}><Dot color={owner.color} />{peopleOf(tripId, list)}分享・只能看</span>
             )}
@@ -264,7 +273,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
           <button type="button" className="row-btn li" onClick={() => { setMenu(false); setCollab(true); }}>
             <span className="li-main" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
               <span>與他人共用</span>
-              <span className="muted tiny">{(list.editors ?? []).length ? `${peopleOf(tripId, list)}（大家都可以編輯）` : '選擇可以一起編輯的人'}</span>
+              <span className="muted tiny">{editorsOf(tripId, list).length ? `${peopleOf(tripId, list)}（大家都可以編輯）` : '選擇可以一起編輯的人'}</span>
             </span><Icon.users />
           </button>
           <div className="li" style={{ justifyContent: 'space-between' }}>
@@ -400,7 +409,8 @@ function CollabSheet({ tripId, list, me, onClose }: { tripId: string; list: Trip
   const people = store.members(tripId).filter((m) => m.user_id !== me && m.user_id !== list.owner_id)
     .map((m) => ({ id: m.user_id, ...ownerOf(tripId, m.user_id) }))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
-  const [picked, setPicked] = useState<string[]>(list.editors ?? []);
+  const [picked, setPicked] = useState<string[]>(() => editorsOf(tripId, list));
+  const stale = (list.editors ?? []).length - editorsOf(tripId, list).length;
   const toggle = (id: string) => setPicked((xs) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]));
   async function save() {
     await updateList(store, list.id, { editors: picked });
@@ -421,6 +431,7 @@ function CollabSheet({ tripId, list, me, onClose }: { tripId: string; list: Trip
           </div>
         );
       }) : <p className="muted small">還沒有其他成員。家人用邀請連結加入後，就可以選他們。</p>}
+      {stale > 0 ? <p className="muted tiny">有 {stale} 位之前共用的人已經不在這趟旅行了，按儲存就會移除。</p> : null}
       <p className="muted tiny">只有已經加入這趟旅行的成員可以選。共用的人看得到這個清單、可以新增和修改項目；打勾還是各自的。</p>
       <Button variant="primary" block onClick={save}>儲存</Button>
     </Sheet>

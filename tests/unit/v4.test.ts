@@ -213,3 +213,13 @@ test('清單與他人共用：兩邊都可以編輯，會同步', async () => {
   await a.syncer.sync();
   assert.deepEqual(server.data.tables.lists[id].editors, [mom.id]);
 });
+
+test('共用的人已經不是旅行成員（例如移除的測試手機）：同步時自動拿掉', async () => {
+  const { b, mom, kid, trip, server } = await family();
+  const id = await createList(b.store, trip.id, kid.id, '退稅攻略', '📝');
+  await updateList(b.store, id, { editors: [mom.id, 'removed-phone-1', 'removed-phone-2'] });
+  await b.syncer.sync();
+  await b.syncer.sync();
+  assert.deepEqual(b.store.get('lists', id)!.editors, [mom.id]);
+  assert.deepEqual(server.data.tables.lists[id].editors, [mom.id]);
+});

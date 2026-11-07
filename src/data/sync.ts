@@ -250,6 +250,16 @@ export class Syncer {
       {
         const members = await this.remote.listMembers(trip.id);
         await this.store.setMeta(`members:${trip.id}`, members);
+        // 我的清單裡，共用的人已經不是成員了（例如測試用的手機被移除）：自動拿掉
+        const me = this.userId();
+        const now = new Set(members.map((m) => m.user_id));
+        if (me && now.has(me)) {
+          for (const l of this.store.byTrip('lists', trip.id)) {
+            if (l.owner_id !== me || l.deleted_at) continue;
+            const keep = (l.editors ?? []).filter((u) => now.has(u) && u !== me);
+            if (keep.length !== (l.editors ?? []).length) await this.store.update('lists', l.id, { editors: keep });
+          }
+        }
       }
     }
   }
