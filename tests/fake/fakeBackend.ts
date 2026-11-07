@@ -294,6 +294,11 @@ export class FakeServer {
         if (!s.role(trip, uid())) throw new RemoteError('permission', '沒有權限上傳');
         s.files.set(path, blob);
       },
+      async listFiles(tripId) {
+        s.guard();
+        if (!s.role(tripId, uid())) return [];
+        return [...s.files.keys()].filter((k) => k.startsWith(`${tripId}/`));
+      },
       async downloadFile(path) {
         s.guard();
         const trip = path.split('/')[0];

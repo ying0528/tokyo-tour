@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
 import { canEditActivity, myGroupOn, tripCtx } from '../app/tripContext.ts';
-import { dayPlanOf, draftFromActivity, emptyStep, saveActivity, validateActivity } from '../data/actions.ts';
+import { dayPlanOf, deleteActivity, draftFromActivity, emptyStep, liveSteps, restoreActivity, saveActivity, validateActivity } from '../data/actions.ts';
 import type { ActivityDraft, StepDraft } from '../data/actions.ts';
 import type { ActivityKind, NamedLink, RouteMode } from '../data/types.ts';
 import { dayLabel, daysBetween, tripDays } from '../lib/dates.ts';
@@ -185,6 +185,21 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
     }
   }
 
+  async function remove() {
+    if (!existing) return;
+    const name = activityName(existing, store.get('places', existing.place_id));
+    const ok = await confirmDialog({
+      title: `刪除「${name}」？`,
+      message: existing.kind === 'move' && liveSteps(store, existing.id).length ? '這筆行程和它的交通步驟會一起移到回收桶。票券不會被刪除。' : '這筆行程會被刪除，票券會保留。',
+      confirmText: '刪除',
+      danger: true,
+    });
+    if (!ok) return;
+    await deleteActivity(store, existing.id);
+    navigate(`/t/${tripId}/plan/${existing.date}`, { replace: true });
+    toast('已刪除', 'ok', { label: '復原', run: () => { void restoreActivity(store, existing.id); } });
+  }
+
   const routeTitle = [d.from_name.trim(), d.to_name.trim()].filter(Boolean).join('－');
   const everyone = d.audience_groups.length === 0 && d.audience_travelers.length === 0;
 
@@ -343,6 +358,7 @@ export function ActivityForm({ tripId, activityId, date }: { tripId: string; act
 
         {error?.field === 'save' || error?.field === 'date' ? <p className="notice notice-danger">{error.message}</p> : null}
         <Button variant="primary" block busy={busy} onClick={save}>儲存</Button>
+        {isEdit && existing ? <Button variant="danger" block onClick={remove}><Icon.trash /> 刪除這筆行程</Button> : null}
       </div>
     </Screen>
   );

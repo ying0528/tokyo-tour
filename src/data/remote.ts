@@ -70,6 +70,8 @@ export interface Remote {
   uploadFile(path: string, blob: Blob, contentType: string): Promise<void>;
   downloadFile(path: string): Promise<Blob>;
   deleteFile(path: string): Promise<void>;
+  /** 雲端上某趟旅行有哪些檔案 */
+  listFiles(tripId: string): Promise<string[]>;
 }
 
 export interface Backend {

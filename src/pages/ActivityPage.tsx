@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
 import { canAddTicket, canEditActivity, myTickets, tripCtx } from '../app/tripContext.ts';
-import { deleteActivity, getPrivateNote, linkLabel, liveSteps, restoreActivity, savePrivateNote } from '../data/actions.ts';
+import { getPrivateNote, linkLabel, liveSteps, savePrivateNote } from '../data/actions.ts';
 import type { RouteStep } from '../data/types.ts';
 import { dayLabel, daysBetween } from '../lib/dates.ts';
 import { activityName, hhmm, isTransit, KINDS, modeLabel } from '../lib/plan.ts';
@@ -15,7 +15,7 @@ import { Mascot } from '../ui/Mascot.tsx';
 import { RichText } from '../ui/RichText.tsx';
 import { TicketCard } from './TicketsTab.tsx';
 import { ActImage } from '../ui/ActImage.tsx';
-import { confirmDialog, toast } from '../ui/dialog.tsx';
+import { toast } from '../ui/dialog.tsx';
 
 export function modeIcon(m: RouteStep['mode']): ReactNode {
   if (m === 'walk') return <Icon.walk />;
@@ -108,19 +108,6 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
   const canEdit = canEditActivity(ctx, a);
   const tickets = myTickets(ctx).filter((t) => t.activity_ids.includes(a.id)).sort((x, y) => x.sort_order - y.sort_order);
 
-  async function remove() {
-    const ok = await confirmDialog({
-      title: `刪除「${name}」？`,
-      message: steps.length ? '這筆行程和它的交通步驟會一起移到回收桶。票券不會被刪除。' : '這筆行程會被刪除，票券會保留。',
-      confirmText: '刪除',
-      danger: true,
-    });
-    if (!ok) return;
-    await deleteActivity(store, a!.id);
-    navigate(`/t/${tripId}/plan/${a!.date}`, { replace: true });
-    toast('已刪除', 'ok', { label: '復原', run: () => { void restoreActivity(store, a!.id); } });
-  }
-
   return (
     <Screen header={
       <TopBar title={`Day ${dayN}・${dayLabel(a.date)}`}
@@ -180,9 +167,6 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
 
         {user ? <PrivateMemo tripId={tripId} activityId={a.id} userId={user.id} /> : null}
 
-        {canEdit ? (
-          <Button variant="danger" block onClick={remove}><Icon.trash /> 刪除這筆行程</Button>
-        ) : null}
       </div>
     </Screen>
   );

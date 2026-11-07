@@ -105,6 +105,13 @@ export class Syncer {
       // 剛上傳新旅行時也要抓一次（取得成員資料）
       if (opts.pull !== false || this.newTripUploaded) await this.pull(opts.allTrips ?? false);
       this.newTripUploaded = false;
+      // 之前上傳失敗、雲端沒有的檔案：補傳
+      if (opts.pull !== false && (await this.repairUploads()) > 0) {
+        if ((await this.uploadFiles()) === 'offline') {
+          this.set({ status: 'offline' });
+          return;
+        }
+      }
       // 抓完新資料再下載檔案（新手機第一次同步才知道有哪些圖片）
       if (opts.pull !== false) await this.cacheFiles();
       const at = new Date().toISOString();
@@ -127,27 +134,58 @@ export class Syncer {
         continue;
       }
       try {
-        await this.remote.uploadFile(path, blob, blob.type || 'application/octet-stream');
+        await this.remote.uploadFile(path, blob, blob.type || guessType(path));
         await this.store.markUploaded(path);
       } catch (e) {
         if (e instanceof RemoteError && e.kind === 'network') return 'offline';
-        await this.store.addNotice(`有一個票券檔案上傳失敗：${(e as Error).message}`);
+        const told = this.store.getMeta<string[]>('upload_errors') ?? [];
+        if (!told.includes(path)) {
+          await this.store.addNotice(`有一個檔案上傳失敗：${(e as Error).message}`);
+          await this.store.setMeta('upload_errors', [...told, path].slice(-200));
+        }
         await this.store.markUploaded(path);
       }
     }
     return 'ok';
   }
 
+  /** 這趟旅行用到的所有檔案（票券、路線圖、行程圖片、清單圖片） */
+  referencedPaths(tripId: string): string[] {
+    return [...new Set([
+      ...this.store.byTrip('tickets', tripId).filter((t) => !t.deleted_at).map((t) => t.file_path),
+      ...(this.store.get('trips', tripId)?.settings?.maps ?? []).map((m) => m.path),
+      ...this.store.byTrip('activities', tripId).filter((a) => !a.deleted_at).flatMap((a) => (a.images ?? []).map((i) => i.path)),
+      ...this.store.byTrip('lists', tripId).filter((l) => !l.deleted_at).flatMap((l) => l.items.map((i) => (i.kind === 'image' ? i.path : null))),
+    ].filter((p): p is string => Boolean(p)))];
+  }
+
+  /**
+   * 補上傳：手機裡有、雲端卻沒有的檔案（之前上傳失敗的），重新排進上傳佇列。
+   * 回傳補排了幾個。
+   */
+  async repairUploads(): Promise<number> {
+    const tripId = this.activeTripId();
+    if (!tripId) return 0;
+    const local = this.referencedPaths(tripId).filter((p) => this.store.hasFile(p));
+    if (!local.length) return 0;
+    let onServer: Set<string>;
+    try {
+      onServer = new Set(await this.remote.listFiles(tripId));
+    } catch {
+      return 0;
+    }
+    const queued = new Set(this.store.pendingUploads());
+    const missing = local.filter((p) => !onServer.has(p) && !queued.has(p));
+    if (!missing.length) return 0;
+    await this.store.setMeta('pending_uploads', [...queued, ...missing]);
+    return missing.length;
+  }
+
   /** 把目前這趟旅行的票券檔案下載到手機，離線也能看 */
   async cacheFiles() {
     const tripId = this.activeTripId();
     if (!tripId) return;
-    const paths = [
-      ...this.store.byTrip('tickets', tripId).map((t) => t.file_path),
-      ...(this.store.get('trips', tripId)?.settings?.maps ?? []).map((m) => m.path),
-      ...this.store.byTrip('activities', tripId).flatMap((a) => (a.images ?? []).map((i) => i.path)),
-      ...this.store.byTrip('lists', tripId).flatMap((l) => l.items.map((i) => (i.kind === 'image' ? i.path : null))),
-    ].filter((p): p is string => Boolean(p) && !this.store.hasFile(p));
+    const paths = this.referencedPaths(tripId).filter((p) => !this.store.hasFile(p));
     // 背景下載（排在畫面正在等的圖片後面），不必等全部抓完才繼續同步
     const loader = this.files;
     if (loader) {
@@ -303,3 +341,8 @@ export const TABLE_LABEL: Record<TableName, string> = {
   list_checks: '清單打勾',
   route_legs: '路線',
 };
+
+function guessType(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase();
+  return ext === 'png' ? 'image/png' : ext === 'pdf' ? 'application/pdf' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+}

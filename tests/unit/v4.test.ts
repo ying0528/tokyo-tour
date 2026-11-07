@@ -8,6 +8,7 @@ import { LocalStore } from '../../src/data/store.ts';
 import { Syncer } from '../../src/data/sync.ts';
 import { newActivity, newDayPlan, newRouteStep, newTraveler, newTrip } from '../../src/data/factories.ts';
 import type { AuthUser } from '../../src/data/remote.ts';
+import { RemoteError } from '../../src/data/remote.ts';
 import {
   addCustomLeg, checkedItems, convertMoves, createList, dismissLeg, ensureLeg, listsOf, restoreLeg, saveLegSteps, saveListItem,
   toggleListCheck, updateList,
@@ -222,4 +223,26 @@ test('共用的人已經不是旅行成員（例如移除的測試手機）：�
   await b.syncer.sync();
   assert.deepEqual(b.store.get('lists', id)!.editors, [mom.id]);
   assert.deepEqual(server.data.tables.lists[id].editors, [mom.id]);
+});
+
+test('之前上傳失敗、雲端沒有的圖片：下次同步自動補傳，別人就看得到', async () => {
+  const { a, b, trip, server } = await family();
+  const path = `${trip.id}/imp-test.jpg`;
+  await a.store.saveFile(path, new Blob(['img'], { type: 'image/jpeg' }), true);
+  await a.store.create('activities', newActivity(trip.id, { date: '2026-11-21', title: '有圖', images: [{ id: 'i1', path }] }));
+  // 模擬當時上傳失敗（No content provided），被移出佇列
+  const remote = (a.syncer as unknown as { remote: { uploadFile: (...x: unknown[]) => Promise<void> } }).remote;
+  const real = remote.uploadFile;
+  remote.uploadFile = async () => { throw new RemoteError('other', 'No content provided'); };
+  await a.syncer.sync();
+  assert.equal(a.store.pendingUploads().length, 0);
+  assert.ok(!server.files.has(path));
+  remote.uploadFile = real;
+  await a.syncer.sync();
+  assert.ok(server.files.has(path), '補傳成功');
+  await b.syncer.sync();
+  const blob = await b.store.getFile(path);
+  assert.equal(await blob?.text(), 'img');
+  // 失敗通知只出現一次
+  assert.equal(a.store.getMeta<unknown[]>('notices')?.filter((n) => JSON.stringify(n).includes('No content')).length ?? 1, 1);
 });

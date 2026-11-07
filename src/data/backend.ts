@@ -129,7 +129,14 @@ export function createBackend(): Backend {
       await check(client.rpc('remove_member', { p_trip: tripId, p_user: userId }));
     },
     async uploadFile(path, blob, contentType) {
-      await check(client.storage.from(BUCKET).upload(path, blob, { upsert: true, contentType, cacheControl: '31536000' }));
+      // 先讀成位元組再上傳：iPhone Safari 從手機資料庫拿出的 Blob 直接上傳，有時會變成空的（No content provided）
+      const buf = await blob.arrayBuffer();
+      if (!buf.byteLength) throw new RemoteError('other', '手機裡的這個檔案是空的');
+      await check(client.storage.from(BUCKET).upload(path, buf, { upsert: true, contentType, cacheControl: '31536000' }));
+    },
+    async listFiles(tripId) {
+      const rows = (await check(client.storage.from(BUCKET).list(tripId, { limit: 1000 }))) as { name: string }[];
+      return rows.map((r) => `${tripId}/${r.name}`);
     },
     async downloadFile(path) {
       return (await check(client.storage.from(BUCKET).download(path))) as Blob;
