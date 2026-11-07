@@ -230,7 +230,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
         <div className="row-wrap" style={{ gap: 12, marginBottom: 6, flexWrap: 'nowrap' }}>
           <span className="list-ic lg" style={{ background: iconBg(list) }} aria-hidden="true">{list.icon || '📝'}</span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-            <h1 className="detail-title" style={{ fontSize: 26, textAlign: 'left' }}>{list.title}</h1>
+            <h1 className="detail-title" style={{ fontSize: 'calc(26px + var(--fs-add))', textAlign: 'left' }}>{list.title}</h1>
             {mine ? (
               <span className="muted tiny">{list.items.length} 項{n ? `・買到 ${n} 項` : ''}・{editorsOf(tripId, list).length ? `${peopleOf(tripId, list)} 共用` : '只有我看得到'}{list.shared ? '・已分享給大家' : ''}</span>
             ) : (

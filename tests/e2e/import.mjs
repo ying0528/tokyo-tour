@@ -138,6 +138,29 @@ if (file2) {
   check(box3 && head && Math.abs(box3.y - (head.y + head.height)) < 4, '往下捲時日期列固定在上方');
   await shot('換分頁後日期列');
 }
+
+// 字體大小：小中大，重新打開還記得
+{
+  await tab('旅伴・設定').click();
+  const fs = () => page.evaluate(() => getComputedStyle(document.body).fontSize);
+  check(await fs() === '17px', '預設是小（17px）');
+  await page.getByRole('radio', { name: '中' }).click();
+  check(await fs() === '19px', '中 = 大兩號');
+  await page.getByRole('radio', { name: '大' }).click();
+  check(await fs() === '21px', '大 = 再大兩號');
+  await page.reload();
+  await page.getByRole('radio', { name: '大' }).waitFor();
+  check(await fs() === '21px' && (await page.getByRole('radio', { name: '大' }).getAttribute('aria-checked')) === 'true', '重新打開還記得「大」');
+  await shot('字體大-設定');
+  await tab('行程').click();
+  await shot('字體大-行程');
+  await tab('路線').click();
+  await shot('字體大-路線');
+  const wide = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+  check(!wide, '字體大也不會左右超出畫面');
+  await tab('旅伴・設定').click();
+  await page.getByRole('radio', { name: '小' }).click();
+}
 console.log(errors.length ? `錯誤：${errors.join('\n')}` : '沒有頁面錯誤');
 await browser.close();
 if (errors.length) process.exit(1);

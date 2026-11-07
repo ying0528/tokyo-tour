@@ -4,7 +4,8 @@ import { canEditTrip, myMember, remote, roleOf, store, syncer, useData, useOnlin
 import { navigate } from '../app/router.ts';
 import type { Trip } from '../data/types.ts';
 import { dayCount, rangeLabel, TIMEZONES } from '../lib/dates.ts';
-import { Button, Dot, List, Notice, Row, Section } from '../ui/kit.tsx';
+import { Button, Dot, List, Notice, Row, Section, Segmented } from '../ui/kit.tsx';
+import { getFontSize, setFontSize, type FontSize } from '../lib/fontSize.ts';
 import { Icon } from '../ui/icons.tsx';
 import { useSyncSummary } from '../ui/SyncBadge.tsx';
 import { confirmDialog, toast } from '../ui/dialog.tsx';
@@ -115,6 +116,8 @@ export function SettingsTab({ trip }: { trip: Trip }) {
 
   return (
     <div className="pad stack-lg">
+      <FontSizeSection />
+
       <Section title="旅程資訊">
         <List>
           <Row title={trip.title || '未命名旅行'}
@@ -208,5 +211,16 @@ export function SettingsTab({ trip }: { trip: Trip }) {
         {role !== 'owner' ? <p className="muted small">你的權限：{role === 'editor' ? '管理者（可以編輯所有內容）' : '使用者（可以改分組那天自己那組的行程、自己的備忘錄、清單、票券）'}</p> : null}
       </Section>
     </div>
+  );
+}
+
+function FontSizeSection() {
+  const [size, setSize] = useState<FontSize>(getFontSize);
+  return (
+    <Section title="字體大小">
+      <Segmented label="字體大小" value={size} onChange={(v) => { setSize(v); setFontSize(v); }}
+        options={[{ value: 's', label: '小' }, { value: 'm', label: '中' }, { value: 'l', label: '大' }]} />
+      <p className="muted tiny">只會改這支手機，關掉 App 再打開也會記住。</p>
+    </Section>
   );
 }

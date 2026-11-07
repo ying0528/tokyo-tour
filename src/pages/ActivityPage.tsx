@@ -41,7 +41,7 @@ export function StepView({ s }: { s: RouteStep }) {
     <div className="step">
       <span className="step-icon" style={{ background: MODE_BG[s.mode] }}>{modeIcon(s.mode)}</span>
       <div className="step-body">
-        <span style={{ fontSize: 18 }}>{title}{s.line.trim() ? <span className="muted tiny">　{modeLabel(s.mode)}</span> : null}</span>
+        <span style={{ fontSize: 'calc(18px + var(--fs-add))' }}>{title}{s.line.trim() ? <span className="muted tiny">　{modeLabel(s.mode)}</span> : null}</span>
         {fromTo ? <span className="small muted">{fromTo}</span> : null}
         {transit && s.direction.trim() ? <span className="small muted">方向：{s.direction}</span> : null}
         {s.exit_info.trim() ? <span className="small muted">出口：{s.exit_info}</span> : null}
@@ -118,7 +118,7 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
         <div className="detail-hero" style={{ background: 'var(--surface)' }}>
           {kind.short ? <span className="badge" style={{ background: kind.bg }}>{kind.label}</span> : null}
           <h1 className="detail-title">{name}</h1>
-          {a.start_time ? <span className="num" style={{ fontSize: 24 }}>{hhmm(a.start_time)}</span> : null}
+          {a.start_time ? <span className="num" style={{ fontSize: 'calc(24px + var(--fs-add))' }}>{hhmm(a.start_time)}</span> : null}
         </div>
 
         {a.notes.trim() ? (
@@ -129,7 +129,7 @@ export function ActivityPage({ tripId, activityId }: { tripId: string; activityI
         {map || links.length ? (
           <div className="stack-sm">
             {map ? (
-              <a className="btn btn-block" style={{ background: 'var(--mint)', boxShadow: 'var(--pop)', minHeight: 54, fontSize: 18 }} href={map} target="_blank" rel="noopener noreferrer">
+              <a className="btn btn-block" style={{ background: 'var(--mint)', boxShadow: 'var(--pop)', minHeight: 54, fontSize: 'calc(18px + var(--fs-add))' }} href={map} target="_blank" rel="noopener noreferrer">
                 <Icon.place /> 打開地圖
               </a>
             ) : null}

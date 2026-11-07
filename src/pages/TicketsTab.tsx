@@ -33,7 +33,7 @@ export function TicketCard({ t, ctx }: { t: Ticket; ctx: TripCtx }) {
     <button type="button" className="ticket" onClick={() => navigate(`/t/${t.trip_id}/tk/${t.id}`)}>
       <span className="ticket-main">
         {t.kind.trim() ? <span className="tag" style={{ alignSelf: 'flex-start', background: 'var(--pink)' }}>{t.kind}</span> : null}
-        <span style={{ fontSize: 19, overflowWrap: 'anywhere' }}>{t.title}</span>
+        <span style={{ fontSize: 'calc(19px + var(--fs-add))', overflowWrap: 'anywhere' }}>{t.title}</span>
         <span className="tiny muted">
           {[holders.length ? holders.join('、') : '全員共用', acts.length ? `連到：${acts.map((a) => `${a.start_time ? `${hhmm(a.start_time)} ` : ''}${activityName(a, store.get('places', a.place_id))}`).join('、')}` : ''].filter(Boolean).join('・')}
         </span>

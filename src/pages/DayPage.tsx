@@ -121,7 +121,7 @@ export function DayPage({ tripId, date }: { tripId: string; date: string }) {
                   {ctx.travelers.map((t) => (
                     <div key={t.id} className="card" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <span className="avatar sm" style={{ background: t.color || 'var(--surface)' }}>{t.name.slice(0, 1)}</span>
-                      <span style={{ fontSize: 18 }}>{t.name}</span>
+                      <span style={{ fontSize: 'calc(18px + var(--fs-add))' }}>{t.name}</span>
                       <span className="spacer" />
                       <div className="chips">
                         {groups.map((g, i) => (
