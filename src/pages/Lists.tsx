@@ -189,7 +189,6 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
     return <Screen header={<TopBar title="清單" left={<BackButton onClick={close} />} />}><Empty title="找不到這個清單">可能已被刪除或取消分享。</Empty></Screen>;
   }
   const mine = canEditList(list, user?.id);
-  const isOwner = list.owner_id === user?.id;
   const [collab, setCollab] = useState(false);
   const done = checkedItems(store, list.id, user?.id);
   const owner = ownerOf(tripId, list.owner_id);
@@ -200,7 +199,8 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
   }
 
   async function removeList() {
-    const ok = await confirmDialog({ title: `刪除「${list!.title}」？`, message: '清單裡的項目會一起刪除。', confirmText: '刪除', danger: true });
+    const others = (list!.editors ?? []).length > 0 || list!.owner_id !== user?.id;
+    const ok = await confirmDialog({ title: `刪除「${list!.title}」？`, message: others ? '清單裡的項目會一起刪除，共用的人也會看不到。' : '清單裡的項目會一起刪除。', confirmText: '刪除', danger: true });
     if (!ok) return;
     await store.softDelete('lists', list!.id);
     toast('已刪除', 'ok', { label: '復原', run: () => { void store.restore('lists', list!.id); } });
@@ -269,7 +269,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
               <button type="button" className="icon-btn plain" aria-label="編輯" onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/${item.id}`); }}><Icon.edit /></button>
             </div>
           ))}
-          {isOwner ? <>
+          <>
           <button type="button" className="row-btn li" onClick={() => { setMenu(false); setCollab(true); }}>
             <span className="li-main" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 0 }}>
               <span>與他人共用</span>
@@ -283,7 +283,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
           </div>
           <p className="muted tiny">開啟後，所有旅伴都能在「看看別人分享的清單」看到，會標示是誰分享的。沒有共用的人只能看、不能改。</p>
           <Button variant="text" className="danger" onClick={() => { setMenu(false); void removeList(); }}>刪除這個清單</Button>
-          </> : <p className="muted tiny">這是 {ownerOf(tripId, list.owner_id).name} 跟你共用的清單，可以一起編輯項目；分享和刪除由 {ownerOf(tripId, list.owner_id).name} 決定。</p>}
+          </>
         </Sheet>
       ) : null}
 
@@ -414,12 +414,13 @@ function CollabSheet({ tripId, list, me, onClose }: { tripId: string; list: Trip
   const toggle = (id: string) => setPicked((xs) => (xs.includes(id) ? xs.filter((x) => x !== id) : [...xs, id]));
   async function save() {
     await updateList(store, list.id, { editors: picked });
-    toast(picked.length ? '已共用，大家都可以編輯' : '已取消共用');
+    toast(picked.some((u) => u !== me) || list.owner_id !== me ? '已儲存，共用的人都可以編輯' : '已取消共用');
     onClose();
   }
   return (
     <Sheet title="與他人共用" subtitle="選的人可以一起編輯，不管誰改，大家都會同步" onClose={onClose}
       action={<Button variant="primary" onClick={save} style={{ minHeight: 44, padding: '0 16px' }}>儲存</Button>}>
+      {list.owner_id !== me ? <p className="muted small">建立的人：{ownerOf(tripId, list.owner_id).name}（一定可以編輯）</p> : null}
       {people.length ? people.map((p) => {
         const on = picked.includes(p.id);
         return (
@@ -432,7 +433,7 @@ function CollabSheet({ tripId, list, me, onClose }: { tripId: string; list: Trip
         );
       }) : <p className="muted small">還沒有其他成員。家人用邀請連結加入後，就可以選他們。</p>}
       {stale > 0 ? <p className="muted tiny">有 {stale} 位之前共用的人已經不在這趟旅行了，按儲存就會移除。</p> : null}
-      <p className="muted tiny">只有已經加入這趟旅行的成員可以選。共用的人看得到這個清單、可以新增和修改項目；打勾還是各自的。</p>
+      <p className="muted tiny">只有已經加入這趟旅行的成員可以選。共用的人跟建立的人有一樣的權限：可以新增修改項目、改分享和共用名單、刪除清單；打勾還是各自的。</p>
       <Button variant="primary" block onClick={save}>儲存</Button>
     </Sheet>
   );

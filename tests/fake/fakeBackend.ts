@@ -147,10 +147,10 @@ export class FakeServer {
         s.guard();
         const row = s.data.tables[table][id];
         if (!row || !s.canSee(table, row, uid())) return null;
-        if (table === 'lists' && row.owner_id !== uid() && ('shared' in patch || 'editors' in patch || 'deleted_at' in patch)) {
-          throw new RemoteError('permission', '只有建立清單的人可以改分享、共用或刪除');
+        if (table === 'lists' && 'owner_id' in patch && patch.owner_id !== row.owner_id) {
+          throw new RemoteError('permission', '不能變更清單擁有者');
         }
-        if (!s.canWrite(table, row, uid()) || !s.canWrite(table, { ...row, ...patch }, uid())) {
+        if (!s.canWrite(table, row, uid()) || (table !== 'lists' && !s.canWrite(table, { ...row, ...patch }, uid()))) {
           if (table === 'private_notes' || table === 'list_checks' || table === 'lists') return null;
           throw new RemoteError('permission', '沒有權限（使用者只能改自己的內容）');
         }

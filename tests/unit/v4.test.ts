@@ -209,10 +209,14 @@ test('清單與他人共用：兩邊都可以編輯，會同步', async () => {
   assert.equal(a.store.pending().length, 0, a.store.pending().map((e) => e.last_error).join());
   await b.syncer.sync();
   assert.deepEqual(b.store.get('lists', id)!.items.map((i) => i.text), ['媽媽加的']);
-  // 共用的人不能取消共用
-  await a.store.update('lists', id, { editors: [] });
+  // 共用的人也可以分享給大家、刪除
+  await a.store.update('lists', id, { shared: true });
   await a.syncer.sync();
-  assert.deepEqual(server.data.tables.lists[id].editors, [mom.id]);
+  assert.equal(server.data.tables.lists[id].shared, true);
+  await a.store.softDelete('lists', id);
+  await a.syncer.sync();
+  assert.equal(a.store.pending().length, 0, a.store.pending().map((e) => e.last_error).join());
+  assert.ok(server.data.tables.lists[id].deleted_at, '共用的人可以刪除');
 });
 
 test('共用的人已經不是旅行成員（例如移除的測試手機）：同步時自動拿掉', async () => {

@@ -608,20 +608,16 @@ drop policy if exists route_legs_delete on public.route_legs;
 create policy route_legs_delete on public.route_legs for delete to authenticated
   using (public.can_edit(trip_id));
 
--- 清單：自己的可以改；分享出來的大家都看得到（只能看）
+-- 清單：自己的和共用給我的可以改（含分享、共用名單、刪除）；分享出來的大家都看得到（只能看）
 alter table public.lists enable row level security;
 alter table public.list_checks enable row level security;
 alter table public.route_legs enable row level security;
 create or replace function public.tg_lock_owner() returns trigger
 language plpgsql as $$
 begin
+  -- 共用的人跟擁有者一樣可以改分享、共用名單、刪除；只有擁有者和所屬旅行不能換
   if new.owner_id is distinct from old.owner_id then raise exception '不能變更清單擁有者'; end if;
-  -- 共用的人可以改內容，但分享、共用名單、刪除只有擁有者能改
-  if old.owner_id is distinct from auth.uid() and (
-       new.shared is distinct from old.shared or new.editors is distinct from old.editors
-       or new.deleted_at is distinct from old.deleted_at) then
-    raise exception '只有建立清單的人可以改分享、共用或刪除';
-  end if;
+  if new.trip_id is distinct from old.trip_id then raise exception '不能把清單移到別的旅行'; end if;
   return new;
 end $$;
 drop trigger if exists lock_owner on public.lists;
@@ -636,10 +632,10 @@ create policy lists_insert on public.lists for insert to authenticated
 drop policy if exists lists_update on public.lists;
 create policy lists_update on public.lists for update to authenticated
   using ((owner_id = auth.uid() or auth.uid() = any(editors)) and public.is_member(trip_id))
-  with check ((owner_id = auth.uid() or auth.uid() = any(editors)) and public.is_member(trip_id));
+  with check (public.is_member(trip_id));
 drop policy if exists lists_delete on public.lists;
 create policy lists_delete on public.lists for delete to authenticated
-  using (owner_id = auth.uid());
+  using ((owner_id = auth.uid() or auth.uid() = any(editors)) and public.is_member(trip_id));
 drop policy if exists list_checks_own on public.list_checks;
 create policy list_checks_own on public.list_checks for all to authenticated
   using (user_id = auth.uid() and public.is_member(trip_id))
