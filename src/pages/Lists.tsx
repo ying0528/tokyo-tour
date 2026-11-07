@@ -1,16 +1,15 @@
 // 清單：每個人自己的清單（想買的、想吃的…），可以分享給大家看；打勾只有自己看得到
 import { useState } from 'react';
-import { store, useData, useSession } from '../app/services.ts';
+import { canEditTrip, store, useData, useSession } from '../app/services.ts';
 import { goBack, navigate } from '../app/router.ts';
 import type { TripCtx } from '../app/tripContext.ts';
 import {
-  canEditList, checkedItems, createList, deleteListItem, isPinned, listsOf, moveListItem, saveListItem, toggleListCheck, togglePin, updateList, validateListItem,
+  addTripIcon, canEditList, checkedItems, deleteTripIcon, setHiddenIcons, tripIcons, createList, deleteListItem, isPinned, listsOf, moveListItem, saveListItem, toggleListCheck, togglePin, updateList, validateListItem,
 } from '../data/actions.ts';
 import type { ListItem, TripList } from '../data/types.ts';
 import { safeUrl } from '../lib/links.ts';
-import { prepareUpload } from '../lib/image.ts';
 import { useFileUrl } from '../ui/useFile.ts';
-import { isImageIcon, makeIcon } from '../lib/image.ts';
+import { isImageIcon, makeIcon, prepareUpload } from '../lib/image.ts';
 import { BackButton, Button, Dot, Empty, Field, Screen, Segmented, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
@@ -115,7 +114,7 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
         );
       })}</div> : <p className="muted small">家人分享清單後會出現在這裡。</p>}
 
-      {adding && user ? <ListNameSheet title="新增清單" onClose={() => setAdding(false)} onSave={async (title, icon) => {
+      {adding && user ? <ListNameSheet tripId={ctx.trip.id} title="新增清單" onClose={() => setAdding(false)} onSave={async (title, icon) => {
         const id = await createList(store, ctx.trip.id, user.id, title, icon);
         setAdding(false);
         navigate(`/t/${ctx.trip.id}/l/${id}`);
@@ -132,24 +131,50 @@ function PinButton({ pinned, title, onClick }: { pinned: boolean; title: string;
   );
 }
 
-function ListNameSheet({ title, initial, onClose, onSave }: {
+function ListNameSheet({ tripId, title, initial, onClose, onSave }: {
+  tripId: string;
   title: string;
   initial?: { title: string; icon: string };
   onClose: () => void;
   onSave: (title: string, icon: string) => Promise<void>;
 }) {
+  useData();
+  const { user } = useSession();
+  const trip = store.get('trips', tripId);
+  const admin = canEditTrip(trip, user?.id);
+  const hidden = trip?.settings?.hidden_icons ?? [];
+  const builtins = ICONS.filter((x) => !hidden.includes(x));
+  const library = tripIcons(store, tripId);
   const [name, setName] = useState(initial?.title ?? '');
-  const [icon, setIcon] = useState(initial?.icon || ICONS[0]);
-  const [custom, setCustom] = useState<string | null>(isImageIcon(initial?.icon) ? initial!.icon : null);
+  const [icon, setIcon] = useState(initial?.icon || builtins[0] || ICONS[0]);
   const [busy, setBusy] = useState(false);
+  const [manage, setManage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 目前用的圖示不在選單裡（被拿掉了、或是之前上傳還沒進圖示庫的）也要顯示，才不會被換掉
+  const current = initial?.icon && !builtins.includes(initial.icon) && !library.some((i) => i.image === initial.icon) ? initial.icon : null;
+
   async function save() {
     try {
+      if (user && isImageIcon(icon)) await addTripIcon(store, tripId, user.id, icon).catch(() => undefined);
       await onSave(name, icon);
     } catch (e) {
       setError((e as Error).message);
     }
   }
+  async function removeBuiltin(x: string) {
+    const ok = await confirmDialog({ title: `拿掉「${x}」？`, message: '大家選圖示時就不會再看到它。已經在用的清單不會改變。', confirmText: '拿掉', danger: true });
+    if (!ok) return;
+    await setHiddenIcons(store, tripId, [...hidden, x]);
+    if (icon === x && x !== initial?.icon) setIcon(builtins.find((y) => y !== x) ?? x);
+  }
+  async function removeLibrary(id: string, image: string) {
+    const ok = await confirmDialog({ title: '刪除這個圖示？', message: '會從大家的圖示選單裡拿掉。已經在用的清單不會改變。', confirmText: '刪除', danger: true });
+    if (!ok) return;
+    await deleteTripIcon(store, id);
+    if (icon === image && image !== initial?.icon) setIcon(builtins[0] ?? ICONS[0]);
+  }
+  const mayDelete = (owner: string) => admin || owner === user?.id;
+
   return (
     <Sheet title={title} onClose={onClose}
       action={<Button variant="primary" onClick={save} style={{ minHeight: 44, padding: '0 16px' }}>儲存</Button>}>
@@ -159,27 +184,37 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
         </Field>
       </form>
       <div className="field">
-        <span className="field-label">圖示</span>
-        <div className="emoji-grid" role="radiogroup" aria-label="圖示">
-          {ICONS.map((x) => (
-            <button key={x} type="button" role="radio" aria-checked={icon === x} className={`emoji-btn${icon === x ? ' is-on' : ''}`} onClick={() => setIcon(x)}>{x}</button>
-          ))}
-          {custom ? (
-            <button type="button" role="radio" aria-checked={icon === custom} aria-label="自己的圖片" className={`emoji-btn img${icon === custom ? ' is-on' : ''}`} onClick={() => setIcon(custom)}>
-              <img src={custom} alt="" />
-            </button>
-          ) : null}
+        <div className="section-head" style={{ margin: 0 }}>
+          <span className="field-label">圖示</span>
+          <button type="button" className="link-btn inline" onClick={() => setManage(!manage)}>{manage ? '完成' : '刪除圖示'}</button>
         </div>
+        {manage ? <p className="field-hint">按圖示右上角的 ✕ 刪除。{admin ? '' : '內建的圖示只有管理者可以拿掉；你可以刪除自己上傳的。'}</p> : null}
+        <div className="emoji-grid" role="radiogroup" aria-label="圖示">
+          {current ? (
+            <IconChoice key="current" value={current} on={icon === current} label="目前的圖示" onPick={() => setIcon(current)} />
+          ) : null}
+          {builtins.map((x) => (
+            <IconChoice key={x} value={x} on={icon === x} label={x} onPick={() => setIcon(x)}
+              onDelete={manage && admin ? () => void removeBuiltin(x) : undefined} />
+          ))}
+          {library.map((i) => (
+            <IconChoice key={i.id} value={i.image} on={icon === i.image} label={`${i.owner_id === user?.id ? '我' : ownerOf(tripId, i.owner_id).name}上傳的圖示`} onPick={() => setIcon(i.image)}
+              onDelete={manage && mayDelete(i.owner_id) ? () => void removeLibrary(i.id, i.image) : undefined} />
+          ))}
+        </div>
+        {admin && hidden.length ? (
+          <button type="button" className="link-btn inline tiny" onClick={() => void setHiddenIcons(store, tripId, [])}>還原拿掉的 {hidden.length} 個內建圖示</button>
+        ) : null}
         <label className="btn btn-secondary icon-upload">
-          {busy ? <span className="spinner" aria-hidden="true" /> : <Icon.camera />} {custom ? '換一張自己的圖片' : '用自己的圖片當圖示'}
+          {busy ? <span className="spinner" aria-hidden="true" /> : <Icon.camera />} 上傳自己的圖示
           <input type="file" accept="image/*" aria-label="選擇圖示圖片" style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} onChange={async (e) => {
             const f = e.target.files?.[0];
             e.target.value = '';
-            if (!f) return;
+            if (!f || !user) return;
             setBusy(true);
             try {
               const url = await makeIcon(f);
-              setCustom(url);
+              await addTripIcon(store, tripId, user.id, url);
               setIcon(url);
             } catch (err) {
               setError((err as Error).message);
@@ -188,10 +223,22 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
             }
           }} />
         </label>
-        <span className="field-hint">會自動裁成正方形的小圖。</span>
+        <span className="field-hint">會自動裁成正方形的小圖，放進這趟旅行的圖示庫，大家都可以用。</span>
       </div>
       <Button variant="primary" block onClick={save}>儲存</Button>
     </Sheet>
+  );
+}
+
+function IconChoice({ value, on, label, onPick, onDelete }: { value: string; on: boolean; label: string; onPick: () => void; onDelete?: () => void }) {
+  const img = isImageIcon(value);
+  return (
+    <span className="emoji-cell">
+      <button type="button" role="radio" aria-checked={on} aria-label={label} className={`emoji-btn${img ? ' img' : ''}${on ? ' is-on' : ''}`} onClick={onPick}>
+        {img ? <img src={value} alt="" /> : value}
+      </button>
+      {onDelete ? <button type="button" className="emoji-del" aria-label={`刪除${img ? label : `「${value}」`}`} onClick={onDelete}>✕</button> : null}
+    </span>
   );
 }
 
@@ -337,7 +384,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
       {collab ? <CollabSheet tripId={tripId} list={list} me={user?.id ?? ''} onClose={() => setCollab(false)} /> : null}
 
       {renaming ? (
-        <ListNameSheet title="清單名稱和圖示" initial={{ title: list.title, icon: list.icon }} onClose={() => setRenaming(false)}
+        <ListNameSheet tripId={tripId} title="清單名稱和圖示" initial={{ title: list.title, icon: list.icon }} onClose={() => setRenaming(false)}
           onSave={async (title, icon) => { await updateList(store, list.id, { title, icon }); setRenaming(false); toast('已儲存'); }} />
       ) : null}
     </Screen>

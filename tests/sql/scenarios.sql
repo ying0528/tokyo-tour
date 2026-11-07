@@ -169,6 +169,23 @@ update public.lists set deleted_at = null where id = '99999999-0000-4000-8000-00
 select pg_temp.expect_error($$update public.lists set owner_id = :'owner' where id = '99999999-0000-4000-8000-000000000001'$$, '共用的人也不能搶走清單');
 select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
 
+-- 圖示庫：大家都看得到、都可以上傳；只有上傳的人或管理者可以刪
+insert into public.trip_icons (id, trip_id, image) values ('99999999-0000-4000-8000-0000000000a1', :'trip', 'data:image/jpeg;base64,AAAA');
+select pg_temp.expect((select count(*) from public.trip_icons) = 1, '使用者可以上傳圖示');
+select pg_temp.expect_error($$insert into public.trip_icons (id, trip_id, image) values (gen_random_uuid(), 'aaaaaaaa-0000-4000-8000-000000000001', 'javascript:alert(1)')$$, '圖示只能是圖片');
+select set_config('request.jwt.claims', json_build_object('sub', :'owner')::text, false);
+select pg_temp.expect((select count(*) from public.trip_icons) = 1, '別人上傳的圖示大家都看得到');
+insert into public.trip_icons (id, trip_id, image) values ('99999999-0000-4000-8000-0000000000a2', :'trip', 'data:image/jpeg;base64,BBBB');
+select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
+update public.trip_icons set deleted_at = now() where id = '99999999-0000-4000-8000-0000000000a2';
+select pg_temp.expect((select deleted_at from public.trip_icons where id = '99999999-0000-4000-8000-0000000000a2') is null, '使用者不能刪別人的圖示');
+update public.trip_icons set deleted_at = now() where id = '99999999-0000-4000-8000-0000000000a1';
+select pg_temp.expect((select deleted_at from public.trip_icons where id = '99999999-0000-4000-8000-0000000000a1') is not null, '可以刪自己上傳的圖示');
+select set_config('request.jwt.claims', json_build_object('sub', :'owner')::text, false);
+update public.trip_icons set deleted_at = now() where id = '99999999-0000-4000-8000-0000000000a2';
+select pg_temp.expect((select deleted_at from public.trip_icons where id = '99999999-0000-4000-8000-0000000000a2') is not null, '管理者可以刪任何圖示');
+select set_config('request.jwt.claims', json_build_object('sub', :'guest', 'is_anonymous', true)::text, false);
+
 -- ===== 陌生人 =====
 select set_config('request.jwt.claims', json_build_object('sub', :'stranger')::text, false);
 select pg_temp.expect((select count(*) from public.trips) = 0, '陌生人看不到旅行');

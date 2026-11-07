@@ -1,5 +1,5 @@
 // 建立新資料時的預設值（id 由手機產生，離線也能新增）
-import type { Activity, DayPlan, ListCheck, Place, PrivateNote, RouteLeg, RouteStep, Ticket, Traveler, Trip, TripList } from './types.ts';
+import type { Activity, DayPlan, ListCheck, Place, PrivateNote, RouteLeg, RouteStep, Ticket, Traveler, Trip, TripList, TripIcon } from './types.ts';
 
 const base = () => ({
   id: crypto.randomUUID(),
@@ -78,6 +78,10 @@ export function newList(tripId: string, ownerId: string, fields: Partial<TripLis
 
 export function newListCheck(tripId: string, listId: string, userId: string, id: string, checked: string[]): ListCheck {
   return { ...base(), id, trip_id: tripId, list_id: listId, user_id: userId, checked, pinned: false };
+}
+
+export function newTripIcon(tripId: string, userId: string, image: string): TripIcon {
+  return { ...base(), trip_id: tripId, owner_id: userId, image };
 }
 
 export function newLeg(tripId: string, fields: Partial<RouteLeg> & Pick<RouteLeg, 'date'>): RouteLeg {

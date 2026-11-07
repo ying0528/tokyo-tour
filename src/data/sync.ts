@@ -273,7 +273,14 @@ export class Syncer {
       let max = since;
       for (const table of TABLES) {
         if (table === 'trips') continue;
-        const rows = await this.remote.pullTable(table, trip.id, since);
+        let rows;
+        try {
+          rows = await this.remote.pullTable(table, trip.id, since);
+        } catch (e) {
+          // 新加的資料表（雲端還沒重跑 schema.sql）：先跳過，不影響其他資料同步
+          if (OPTIONAL_TABLES.has(table) && !(e instanceof RemoteError && e.kind === 'network')) continue;
+          throw e;
+        }
         await this.store.applyServerRows(table, rows);
         for (const r of rows) if (r.updated_at && (!max || r.updated_at > max)) max = r.updated_at;
       }
@@ -340,7 +347,11 @@ export const TABLE_LABEL: Record<TableName, string> = {
   lists: '清單',
   list_checks: '清單打勾',
   route_legs: '路線',
+  trip_icons: '圖示',
 };
+
+/** 比較新的資料表：雲端還沒建立時先略過 */
+const OPTIONAL_TABLES = new Set<string>(['trip_icons']);
 
 function guessType(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase();

@@ -39,6 +39,8 @@ export interface TripSettings {
   moves_converted?: boolean;
   /** 已經匯入過的行程檔代號 */
   imports?: string[];
+  /** 管理者從清單圖示裡拿掉的內建 emoji */
+  hidden_icons?: string[];
 }
 
 export interface Traveler extends TripContent {
@@ -164,6 +166,13 @@ export interface TripList extends TripContent {
   editors: string[];
 }
 
+/** 旅行的圖示庫：大家上傳的清單圖示 */
+export interface TripIcon extends TripContent {
+  owner_id: string;
+  /** data:image/jpeg;base64,… 的小圖 */
+  image: string;
+}
+
 /** 清單打勾：每個人自己的 */
 export interface ListCheck extends TripContent {
   list_id: string;
@@ -246,6 +255,7 @@ export const TABLES = [
   'lists',
   'list_checks',
   'route_legs',
+  'trip_icons',
 ] as const;
 
 export type TableName = (typeof TABLES)[number];
@@ -263,6 +273,7 @@ export interface RowMap {
   lists: TripList;
   list_checks: ListCheck;
   route_legs: RouteLeg;
+  trip_icons: TripIcon;
 }
 
 export type AnyRow = RowMap[TableName];

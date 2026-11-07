@@ -76,6 +76,7 @@ export class FakeServer {
     if (!this.role(trip, user)) return false;
     if (table === 'private_notes' || table === 'list_checks') return row.user_id === user;
     if (table === 'lists') return row.owner_id === user || ((row.editors as string[]) ?? []).includes(user ?? '');
+    if (table === 'trip_icons') return row.owner_id === user || this.canEdit(trip, user);
     if (this.canEdit(trip, user)) return true;
     if (table === 'activities') {
       const groups = (row.audience_groups as string[]) ?? [];
@@ -123,7 +124,8 @@ export class FakeServer {
           if (!user || user.is_anonymous || row.owner_id !== user.id) throw new RemoteError('permission', '沒有權限');
         } else {
           if (table === 'private_notes' || table === 'list_checks') row.user_id = row.user_id ?? uid();
-          if (table === 'lists') row.owner_id = row.owner_id ?? uid();
+          if (table === 'lists' || table === 'trip_icons') row.owner_id = row.owner_id ?? uid();
+          if (table === 'trip_icons' && row.owner_id !== uid()) throw new RemoteError('permission', '沒有權限');
           if (!s.canWrite(table, row, uid())) throw new RemoteError('permission', '沒有權限（使用者只能改自己的內容）');
         }
         if (table === 'activities' && row.place_id && !s.data.tables.places[row.place_id as string]) {

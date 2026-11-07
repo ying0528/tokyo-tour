@@ -12,6 +12,7 @@ import { RemoteError } from '../../src/data/remote.ts';
 import {
   addCustomLeg, checkedItems, convertMoves, createList, dismissLeg, ensureLeg, listsOf, restoreLeg, saveLegSteps, saveListItem,
   toggleListCheck, updateList,
+  addTripIcon, deleteTripIcon, setHiddenIcons, tripIcons,
 } from '../../src/data/actions.ts';
 import { dayLegs } from '../../src/lib/legs.ts';
 import { dayPlanId } from '../../src/lib/plan.ts';
@@ -249,4 +250,41 @@ test('之前上傳失敗、雲端沒有的圖片：下次同步自動補傳，�
   assert.equal(await blob?.text(), 'img');
   // 失敗通知只出現一次
   assert.equal(a.store.getMeta<unknown[]>('notices')?.filter((n) => JSON.stringify(n).includes('No content')).length ?? 1, 1);
+});
+
+test('圖示庫：大家上傳的圖示每個人都能用；只有上傳的人或管理者能刪', async () => {
+  const { a, b, mom, kid, trip, server } = await family();
+  const img1 = 'data:image/jpeg;base64,AAAA';
+  const img2 = 'data:image/jpeg;base64,BBBB';
+  await addTripIcon(b.store, trip.id, kid.id, img1);
+  await addTripIcon(b.store, trip.id, kid.id, img1); // 同一張不重複
+  await b.syncer.sync();
+  await a.syncer.sync();
+  assert.deepEqual(tripIcons(a.store, trip.id).map((i) => i.image), [img1], '媽媽看得到大寶上傳的圖示');
+  await addTripIcon(a.store, trip.id, mom.id, img2);
+  await a.syncer.sync();
+  await b.syncer.sync();
+  const momIcon = tripIcons(b.store, trip.id).find((i) => i.image === img2)!;
+  await deleteTripIcon(b.store, momIcon.id);
+  await b.syncer.sync();
+  assert.ok(!server.data.tables.trip_icons[momIcon.id].deleted_at, '使用者不能刪別人的圖示');
+  const kidIcon = tripIcons(a.store, trip.id).find((i) => i.image === img1)!;
+  await deleteTripIcon(a.store, kidIcon.id);
+  await a.syncer.sync();
+  assert.ok(server.data.tables.trip_icons[kidIcon.id].deleted_at, '管理者可以刪');
+  // 管理者拿掉內建 emoji
+  await setHiddenIcons(a.store, trip.id, ['🎁']);
+  await a.syncer.sync();
+  await b.syncer.sync();
+  assert.deepEqual(b.store.get('trips', trip.id)!.settings.hidden_icons, ['🎁']);
+});
+
+test('雲端還沒建立圖示庫資料表：其他資料照常同步', async () => {
+  const { a, trip } = await family();
+  const remote = (a.syncer as unknown as { remote: { pullTable: (t: string, ...x: unknown[]) => Promise<unknown[]> } }).remote;
+  const real = remote.pullTable.bind(remote);
+  remote.pullTable = async (t, ...x) => { if (t === 'trip_icons') throw new RemoteError('other', "Could not find the table 'public.trip_icons'"); return real(t, ...x); };
+  await a.store.create('activities', newActivity(trip.id, { date: '2026-11-21', title: '照常同步' }));
+  await a.syncer.sync();
+  assert.equal(a.syncer.getState().status === 'error', false, JSON.stringify(a.syncer.getState()));
 });

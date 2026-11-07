@@ -1,5 +1,5 @@
 // 儲存動作：一個操作會牽動的資料（景點、交通步驟、票券關聯）都在這裡一起處理，畫面只要呼叫一次。
-import { newActivity, newDayPlan, newLeg, newList, newListCheck, newPlace, newPrivateNote, newRouteStep, newTicket, newTraveler, newTrip } from './factories.ts';
+import { newActivity, newDayPlan, newLeg, newList, newListCheck, newPlace, newPrivateNote, newRouteStep, newTicket, newTraveler, newTrip, newTripIcon } from './factories.ts';
 import type { LocalStore } from './store.ts';
 import type { Activity, ActivityKind, DayPlan, LegPlan, LegStep, ListItem, NamedLink, Place, PlaceKind, PrivateNote, RouteLeg, RouteMode, RouteStep, Ticket, Traveler, Trip, TripList } from './types.ts';
 import { dayLegs, legId, stepFromLegacy } from '../lib/legs.ts';
@@ -637,4 +637,29 @@ export async function copyTrip(store: LocalStore, ownerId: string, src: Backup, 
     }
   }
   return trip.id;
+}
+
+// ---------- 圖示庫 ----------
+/** 這趟旅行大家上傳的圖示（還沒刪除的，舊的在前） */
+export function tripIcons(store: LocalStore, tripId: string) {
+  return store.byTrip('trip_icons', tripId).filter((i) => !i.deleted_at).sort((a, b) => (a.created_at ?? '9').localeCompare(b.created_at ?? '9'));
+}
+
+/** 把圖示放進圖示庫（同一張已經在裡面就不重複放） */
+export async function addTripIcon(store: LocalStore, tripId: string, userId: string, image: string) {
+  checkIcon(image);
+  if (!image.startsWith('data:')) return;
+  if (tripIcons(store, tripId).some((i) => i.image === image)) return;
+  await store.create('trip_icons', newTripIcon(tripId, userId, image));
+}
+
+export async function deleteTripIcon(store: LocalStore, iconId: string) {
+  await store.softDelete('trip_icons', iconId);
+}
+
+/** 管理者拿掉／還原內建的 emoji 圖示 */
+export async function setHiddenIcons(store: LocalStore, tripId: string, hidden: string[]) {
+  const trip = store.get('trips', tripId);
+  if (!trip) return;
+  await store.update('trips', tripId, { settings: { ...trip.settings, hidden_icons: [...new Set(hidden)] } });
 }

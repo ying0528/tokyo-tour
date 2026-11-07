@@ -323,6 +323,20 @@ create index if not exists list_checks_sync_idx on public.list_checks(trip_id, u
 -- 釘選別人分享的清單（只有自己看得到）
 alter table public.list_checks add column if not exists pinned boolean not null default false;
 
+-- 旅行的圖示庫：大家上傳的清單圖示（小圖直接存成 data:image/...），每個人都可以拿來用
+create table if not exists public.trip_icons (
+  id uuid primary key,
+  trip_id uuid not null references public.trips(id) on delete cascade,
+  owner_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  image text not null check (length(image) < 120000 and image like 'data:image/%'),
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  updated_by uuid,
+  rev bigint not null default 0
+);
+create index if not exists trip_icons_sync_idx on public.trip_icons(trip_id, updated_at);
+
 -- ---------- 第四版：路線（行程與行程之間怎麼走）----------
 -- 每天（分組的日子每組）相鄰兩個行程之間是一段；steps：
 -- [{"id":"…","mode":"rail"|"bus"|"walk"|"other","line_id":"…","line":"…","color":"#…","code":"G",
@@ -367,11 +381,11 @@ create index if not exists trip_members_user_idx on public.trip_members(user_id)
 do $$
 declare t text;
 begin
-  foreach t in array array['trips','travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes','lists','list_checks','route_legs'] loop
+  foreach t in array array['trips','travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes','lists','list_checks','route_legs','trip_icons'] loop
     execute format('drop trigger if exists touch on public.%I', t);
     execute format('create trigger touch before insert or update on public.%I for each row execute function public.tg_touch()', t);
   end loop;
-  foreach t in array array['travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes','lists','list_checks','route_legs'] loop
+  foreach t in array array['travelers','places','activities','route_steps','tickets','day_plans','personal_status','private_notes','lists','list_checks','route_legs','trip_icons'] loop
     execute format('drop trigger if exists lock_trip on public.%I', t);
     execute format('create trigger lock_trip before update on public.%I for each row execute function public.tg_lock_trip()', t);
   end loop;
@@ -636,6 +650,23 @@ create policy lists_update on public.lists for update to authenticated
 drop policy if exists lists_delete on public.lists;
 create policy lists_delete on public.lists for delete to authenticated
   using ((owner_id = auth.uid() or auth.uid() = any(editors)) and public.is_member(trip_id));
+-- 圖示庫：成員都看得到、都可以新增；上傳的人或管理者可以刪除
+alter table public.trip_icons enable row level security;
+drop policy if exists trip_icons_select on public.trip_icons;
+create policy trip_icons_select on public.trip_icons for select to authenticated
+  using (public.is_member(trip_id));
+drop policy if exists trip_icons_insert on public.trip_icons;
+create policy trip_icons_insert on public.trip_icons for insert to authenticated
+  with check (owner_id = auth.uid() and public.is_member(trip_id));
+drop policy if exists trip_icons_update on public.trip_icons;
+create policy trip_icons_update on public.trip_icons for update to authenticated
+  using ((owner_id = auth.uid() or public.can_edit(trip_id)) and public.is_member(trip_id))
+  with check (public.is_member(trip_id));
+drop policy if exists trip_icons_delete on public.trip_icons;
+create policy trip_icons_delete on public.trip_icons for delete to authenticated
+  using (owner_id = auth.uid() or public.can_edit(trip_id));
+drop trigger if exists lock_owner on public.trip_icons;
+create trigger lock_owner before update on public.trip_icons for each row execute function public.tg_lock_owner();
 drop policy if exists list_checks_own on public.list_checks;
 create policy list_checks_own on public.list_checks for all to authenticated
   using (user_id = auth.uid() and public.is_member(trip_id))

@@ -198,8 +198,18 @@ check(JSON.stringify(await myTitles()) === JSON.stringify(before), '取消釘選
   await page.getByRole('button', { name: /清單名稱和圖示/ }).click();
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAEElEQVR4nGP4z8DwHwyBAgAp7wX7nEhg5QAAAABJRU5ErkJggg==', 'base64');
   await page.getByLabel('選擇圖示圖片').setInputFiles({ name: 'icon.png', mimeType: 'image/png', buffer: png });
-  await page.getByRole('radio', { name: '自己的圖片' }).waitFor();
-  check((await page.getByRole('radio', { name: '自己的圖片' }).getAttribute('aria-checked')) === 'true', '選好的圖片變成目前的圖示');
+  await page.getByRole('radio', { name: '我上傳的圖示' }).waitFor();
+  check((await page.getByRole('radio', { name: '我上傳的圖示' }).getAttribute('aria-checked')) === 'true', '選好的圖片變成目前的圖示');
+  // 刪除圖示：管理者可以拿掉內建的、再還原
+  await page.getByRole('button', { name: '刪除圖示' }).click();
+  await page.getByRole('button', { name: '刪除「🎁」' }).click();
+  await page.getByRole('button', { name: '拿掉', exact: true }).click();
+  await page.waitForTimeout(200);
+  check(await page.getByRole('radio', { name: '🎁' }).count() === 0, '管理者拿掉內建圖示');
+  await page.getByRole('button', { name: /還原拿掉的 1 個內建圖示/ }).click();
+  await page.waitForTimeout(300);
+  check(await page.getByRole('radio', { name: '🎁' }).count() === 1, '可以還原內建圖示');
+  await page.getByRole('button', { name: '完成' }).click();
   await page.locator('.sheet-head').getByRole('button', { name: '儲存' }).click();
   await page.waitForTimeout(300);
   check(await page.locator('.list-ic.lg img').count() === 1, '清單頁顯示自己的圖示');
@@ -308,6 +318,13 @@ await p2.getByText('想買的藥妝').waitFor();
 check((await body(p2)).includes('媽媽分享'), '別人分享的清單標註是誰分享的');
 await p2.getByRole('button', { name: '釘選「想買的藥妝」' }).click();
 check(await p2.getByRole('button', { name: '取消釘選「想買的藥妝」' }).waitFor({ timeout: 4000 }).then(() => true, () => false), '圖釘按下變紅色（已釘選）');
+// 使用者也看得到大家上傳的圖示，但不能刪內建的和別人的
+await p2.getByRole('button', { name: '新增清單' }).click();
+check(await p2.getByRole('radio', { name: /媽媽上傳的圖示/ }).count() === 1, '使用者選圖示時看得到別人上傳的圖示');
+await p2.getByRole('button', { name: '刪除圖示' }).click();
+check(await p2.locator('.emoji-del').count() === 0, '使用者不能刪內建圖示和別人上傳的圖示');
+await shot('使用者-圖示庫', p2);
+await p2.getByRole('button', { name: '關閉' }).click();
 await p2.locator('.list-card-open', { hasText: '想買的藥妝' }).click();
 check(await p2.getByRole('button', { name: '編輯' }).count() === 0, '別人的清單只能看');
 check((await p2.getByRole('checkbox', { name: '面膜 2 盒 買到了' }).getAttribute('aria-checked')) === 'false', '看不到媽媽的打勾');

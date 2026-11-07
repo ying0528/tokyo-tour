@@ -509,3 +509,5 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .emoji-btn.img { padding: 0; overflow: hidden; }
 .icon-upload { position: relative; margin-top: 8px; min-height: 44px; font-size: calc(16px + var(--fs-add)); }
 .li-main .list-ic { width: 28px; height: 28px; border-radius: 8px; font-size: calc(15px + var(--fs-add)); border-width: 2px; }
+.emoji-cell { position: relative; display: grid; }
+.emoji-del { position: absolute; top: -6px; right: -6px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--ink); background: #ffd6d6; color: #8e1a20; font-size: 13px; line-height: 1; display: grid; place-items: center; cursor: pointer; padding: 0; z-index: 1; }

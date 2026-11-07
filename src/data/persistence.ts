@@ -67,7 +67,7 @@ export class MemoryPersistence implements Persistence {
 }
 
 const DB_NAME = 'family-trip';
-const DB_VERSION = 3;
+const DB_VERSION = 4; // 4：圖示庫 trip_icons
 const STORES = [...TABLES, 'outbox', 'meta', 'files'];
 
 /**
