@@ -475,7 +475,7 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .li.image .li-thumb { width: auto; height: 146px; max-width: 62%; aspect-ratio: auto; object-fit: contain; background: #fff8df; font-size: 34px; min-width: 120px; }
 .li.image .li-thumb.empty { width: 146px; }
 .act-time.blank { visibility: hidden; }
-.list-card.other { padding: 0 6px 0 0; gap: 0; }
+.list-card.other, .list-card.pinnable { padding: 0 6px 0 0; gap: 0; }
 .list-card-open { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 12px 8px 12px 14px; background: none; border: 0; text-align: left; cursor: pointer; color: var(--ink); font: inherit; }
 .pin-btn { flex: 0 0 auto; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; }
 .pin-btn.on { color: #8e1a20; }

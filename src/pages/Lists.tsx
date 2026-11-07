@@ -48,9 +48,14 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
   useData();
   const { user } = useSession();
   const [adding, setAdding] = useState(false);
-  const { mine, shared: sharedAll } = listsOf(store, ctx.trip.id, user?.id);
-  // 釘選的排最上面
-  const shared = [...sharedAll.filter((l) => isPinned(store, l.id, user?.id)), ...sharedAll.filter((l) => !isPinned(store, l.id, user?.id))];
+  const { mine: mineAll, shared: sharedAll } = listsOf(store, ctx.trip.id, user?.id);
+  // 釘選的排最上面（只有自己的畫面會這樣排）
+  const pinFirst = (ls: TripList[]) => [...ls.filter((l) => isPinned(store, l.id, user?.id)), ...ls.filter((l) => !isPinned(store, l.id, user?.id))];
+  const mine = pinFirst(mineAll);
+  const shared = pinFirst(sharedAll);
+  const pin = (l: TripList, pinned: boolean) => {
+    if (user) void togglePin(store, ctx.trip.id, l.id, user.id).then(() => toast(pinned ? '已取消釘選' : '已釘選，排在最上面（只有你看得到）'));
+  };
   const open = (l: TripList) => navigate(`/t/${ctx.trip.id}/l/${l.id}`);
 
   return (
@@ -62,18 +67,23 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
       {mine.length ? mine.map((l) => {
         const done = checkedItems(store, l.id, user?.id);
         const n = l.items.filter((i) => done.has(i.id)).length;
+        const pinned = isPinned(store, l.id, user?.id);
+        const together = editorsOf(ctx.trip.id, l).length > 0 || l.owner_id !== user?.id;
         return (
-          <button key={l.id} type="button" className="list-card" onClick={() => open(l)}>
-            <span className="list-ic" style={{ background: iconBg(l) }} aria-hidden="true">{l.icon || '📝'}</span>
-            <span className="list-card-main">
-              <span className="list-card-title">{l.title}</span>
-              <span className="list-card-sub">{l.items.length} 項{n ? `・買到 ${n} 項` : ''}</span>
-            </span>
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-              <span className={`chip-soft${l.shared ? ' ok' : ''}`}>{l.shared ? '已分享' : editorsOf(ctx.trip.id, l).length || l.owner_id !== user?.id ? '共用' : '只有我看得到'}</span>
-              {editorsOf(ctx.trip.id, l).length || l.owner_id !== user?.id ? <span className="list-card-sub">{peopleOf(ctx.trip.id, l)}</span> : null}
-            </span>
-          </button>
+          <div key={l.id} className="list-card pinnable">
+            <button type="button" className="list-card-open" onClick={() => open(l)}>
+              <span className="list-ic" style={{ background: iconBg(l) }} aria-hidden="true">{l.icon || '📝'}</span>
+              <span className="list-card-main">
+                <span className="list-card-title">{l.title}</span>
+                <span className="list-card-sub">{l.items.length} 項{n ? `・買到 ${n} 項` : ''}</span>
+              </span>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                <span className={`chip-soft${l.shared ? ' ok' : ''}`}>{l.shared ? '已分享' : together ? '共用' : '只有我看得到'}</span>
+                {together ? <span className="list-card-sub">{peopleOf(ctx.trip.id, l)}</span> : null}
+              </span>
+            </button>
+            <PinButton pinned={pinned} title={l.title} onClick={() => pin(l, pinned)} />
+          </div>
         );
       }) : (
         <Empty title="還沒有清單">想買的、想吃的、伴手禮…按「新增清單」開始記。</Empty>
@@ -94,10 +104,7 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
               </span>
               <span className="who"><Dot color={o.color} />{peopleOf(ctx.trip.id, l)}分享</span>
             </button>
-            <button type="button" className={`pin-btn${pinned ? ' on' : ''}`} aria-pressed={pinned} aria-label={pinned ? `取消釘選「${l.title}」` : `釘選「${l.title}」`}
-              onClick={() => { if (user) void togglePin(store, ctx.trip.id, l.id, user.id).then(() => toast(pinned ? '已取消釘選' : '已釘選，會排在最上面')); }}>
-              <Icon.pin on={pinned} />
-            </button>
+            <PinButton pinned={pinned} title={l.title} onClick={() => pin(l, pinned)} />
           </div>
         );
       }) : <p className="muted small">家人分享清單後會出現在這裡。</p>}
@@ -108,6 +115,14 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
         navigate(`/t/${ctx.trip.id}/l/${id}`);
       }} /> : null}
     </div>
+  );
+}
+
+function PinButton({ pinned, title, onClick }: { pinned: boolean; title: string; onClick: () => void }) {
+  return (
+    <button type="button" className={`pin-btn${pinned ? ' on' : ''}`} aria-pressed={pinned} aria-label={pinned ? `取消釘選「${title}」` : `釘選「${title}」`} onClick={onClick}>
+      <Icon.pin on={pinned} />
+    </button>
   );
 }
 

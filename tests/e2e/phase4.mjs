@@ -167,6 +167,24 @@ await page.getByRole('button', { name: '刪除這個清單' }).click();
 await page.getByRole('button', { name: '刪除', exact: true }).click();
 await page.getByRole('button', { name: '新增清單' }).waitFor({ timeout: 5000 });
 check(await page.getByText('要刪掉的').count() === 0 && errors.length === 0, '刪除清單後回到清單頁，畫面正常');
+// 我的清單也可以釘選：釘選的排最上面
+for (const name of ['先建的', '後建的']) {
+  await page.getByRole('button', { name: '新增清單' }).click();
+  await page.getByLabel('清單名稱').fill(name);
+  await page.getByLabel('清單名稱').press('Enter');
+  await page.getByRole('heading', { name }).waitFor();
+  await page.getByRole('button', { name: '返回' }).click().catch(async () => { await page.locator('.topbar button').first().click(); });
+  await page.getByRole('button', { name: '新增清單' }).waitFor();
+}
+const myTitles = () => page.locator('.list-card.pinnable .list-card-title').allInnerTexts();
+const before = await myTitles();
+const last = before[before.length - 1];
+await page.getByRole('button', { name: `釘選「${last}」` }).click();
+await page.waitForTimeout(300);
+check((await myTitles())[0] === last, `我的清單釘選後排到最上面（${(await myTitles()).join('、')}）`);
+await page.getByRole('button', { name: `取消釘選「${last}」` }).click();
+await page.waitForTimeout(300);
+check(JSON.stringify(await myTitles()) === JSON.stringify(before), '取消釘選後回到原本的位置');
 await page.getByRole('button', { name: '新增清單' }).click();
 await page.getByLabel('清單名稱').fill('想買的藥妝');
 await page.getByRole('radio', { name: '💊' }).click();
