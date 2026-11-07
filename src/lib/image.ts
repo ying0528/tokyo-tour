@@ -34,3 +34,41 @@ export function formatSize(bytes: number | null | undefined): string {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/** 清單的自訂圖示：裁成正方形、縮成 128px 的小圖（直接存在清單裡，不用另外上傳） */
+export const ICON_PX = 128;
+
+export function isImageIcon(icon: string | null | undefined): boolean {
+  return Boolean(icon && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(icon));
+}
+
+export async function makeIcon(file: File): Promise<string> {
+  let src: CanvasImageSource & { width: number; height: number };
+  let cleanup = () => {};
+  try {
+    const bm = await createImageBitmap(file);
+    src = bm;
+    cleanup = () => bm.close?.();
+  } catch {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    await new Promise<void>((resolve, reject) => { img.onload = () => resolve(); img.onerror = () => reject(new Error('讀不到這張圖片，換一張試試')); img.src = url; });
+    src = Object.assign(img, { width: img.naturalWidth, height: img.naturalHeight });
+    cleanup = () => URL.revokeObjectURL(url);
+  }
+  try {
+    const side = Math.min(src.width, src.height);
+    if (!side) throw new Error('讀不到這張圖片，換一張試試');
+    const canvas = document.createElement('canvas');
+    canvas.width = ICON_PX;
+    canvas.height = ICON_PX;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('讀不到這張圖片，換一張試試');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, ICON_PX, ICON_PX);
+    ctx.drawImage(src, (src.width - side) / 2, (src.height - side) / 2, side, side, 0, 0, ICON_PX, ICON_PX);
+    return canvas.toDataURL('image/jpeg', 0.82);
+  } finally {
+    cleanup();
+  }
+}

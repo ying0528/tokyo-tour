@@ -306,9 +306,15 @@ export function listsOf(store: LocalStore, tripId: string, userId: string | null
   };
 }
 
+/** 圖示可以是 emoji，或自訂的小圖（data:image/...，不能太大） */
+function checkIcon(icon: string | undefined) {
+  if (icon && icon.startsWith('data:') && (icon.length > 120_000 || !/^data:image\/(jpeg|png|webp);base64,/.test(icon))) throw new Error('這張圖示圖片不能用，換一張試試');
+}
+
 export async function createList(store: LocalStore, tripId: string, userId: string, title: string, icon: string): Promise<string> {
   const t = title.trim();
   if (!t) throw new Error('請輸入清單名稱');
+  checkIcon(icon);
   const order = Math.max(-1, ...store.byTrip('lists', tripId).filter((l) => l.owner_id === userId).map((l) => l.sort_order)) + 1;
   return (await store.create('lists', newList(tripId, userId, { title: t, icon, sort_order: order }))).id;
 }
@@ -320,6 +326,7 @@ export function canEditList(l: Pick<TripList, 'owner_id' | 'editors'> | undefine
 
 export async function updateList(store: LocalStore, listId: string, values: Partial<Pick<TripList, 'title' | 'icon' | 'shared' | 'editors'>>) {
   if (values.title !== undefined && !values.title.trim()) throw new Error('請輸入清單名稱');
+  checkIcon(values.icon);
   await store.update('lists', listId, values.title !== undefined ? { ...values, title: values.title.trim() } : values);
 }
 

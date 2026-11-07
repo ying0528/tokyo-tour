@@ -176,7 +176,7 @@ for (const name of ['先建的', '後建的']) {
   await page.getByRole('button', { name: '返回' }).click().catch(async () => { await page.locator('.topbar button').first().click(); });
   await page.getByRole('button', { name: '新增清單' }).waitFor();
 }
-const myTitles = () => page.locator('.list-card.pinnable .list-card-title').allInnerTexts();
+const myTitles = () => page.locator('.list-tile.pinnable .list-card-title').allInnerTexts();
 const before = await myTitles();
 const last = before[before.length - 1];
 await page.getByRole('button', { name: `釘選「${last}」` }).click();
@@ -185,6 +185,30 @@ check((await myTitles())[0] === last, `我的清單釘選後排到最上面（${
 await page.getByRole('button', { name: `取消釘選「${last}」` }).click();
 await page.waitForTimeout(300);
 check(JSON.stringify(await myTitles()) === JSON.stringify(before), '取消釘選後回到原本的位置');
+// 兩兩並排
+{
+  const boxes = await page.locator('.list-tile.pinnable').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.x), Math.round(r.y)]; }));
+  check(boxes.length >= 2 && boxes[0][1] === boxes[1][1] && boxes[1][0] > boxes[0][0], `清單兩兩並排（${JSON.stringify(boxes.slice(0, 2))}）`);
+}
+// 自己的圖片當圖示
+{
+  await page.locator('.list-tile.pinnable', { hasText: '先建的' }).locator('.list-card-open').click();
+  await page.getByRole('heading', { name: '先建的' }).waitFor();
+  await page.getByRole('button', { name: '編輯' }).click();
+  await page.getByRole('button', { name: /清單名稱和圖示/ }).click();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAEElEQVR4nGP4z8DwHwyBAgAp7wX7nEhg5QAAAABJRU5ErkJggg==', 'base64');
+  await page.getByLabel('選擇圖示圖片').setInputFiles({ name: 'icon.png', mimeType: 'image/png', buffer: png });
+  await page.getByRole('radio', { name: '自己的圖片' }).waitFor();
+  check((await page.getByRole('radio', { name: '自己的圖片' }).getAttribute('aria-checked')) === 'true', '選好的圖片變成目前的圖示');
+  await page.locator('.sheet-head').getByRole('button', { name: '儲存' }).click();
+  await page.waitForTimeout(300);
+  check(await page.locator('.list-ic.lg img').count() === 1, '清單頁顯示自己的圖示');
+  await page.getByRole('button', { name: '返回' }).click();
+  await page.locator('.list-tile.pinnable', { hasText: '先建的' }).locator('.list-ic img').waitFor();
+  const src = await page.locator('.list-tile.pinnable', { hasText: '先建的' }).locator('.list-ic img').getAttribute('src');
+  check(src?.startsWith('data:image/jpeg') && src.length < 30000, `列表也顯示自己的圖示（${src?.length} 字）`);
+  await shot('清單-兩兩並排');
+}
 await page.getByRole('button', { name: '新增清單' }).click();
 await page.getByLabel('清單名稱').fill('想買的藥妝');
 await page.getByRole('radio', { name: '💊' }).click();

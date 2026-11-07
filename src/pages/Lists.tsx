@@ -10,6 +10,7 @@ import type { ListItem, TripList } from '../data/types.ts';
 import { safeUrl } from '../lib/links.ts';
 import { prepareUpload } from '../lib/image.ts';
 import { useFileUrl } from '../ui/useFile.ts';
+import { isImageIcon, makeIcon } from '../lib/image.ts';
 import { BackButton, Button, Dot, Empty, Field, Screen, Segmented, TopBar } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
@@ -21,6 +22,16 @@ const BGS = ['var(--pink)', 'var(--peach)', 'var(--mint)', 'var(--aqua)', 'var(-
 function iconBg(l: TripList) {
   const i = Math.max(0, ICONS.indexOf(l.icon));
   return BGS[i % BGS.length];
+}
+
+/** 清單圖示：emoji 或自己上傳的小圖 */
+function ListIcon({ list, lg }: { list: TripList; lg?: boolean }) {
+  const img = isImageIcon(list.icon);
+  return (
+    <span className={`list-ic${lg ? ' lg' : ''}${img ? ' img' : ''}`} style={img ? undefined : { background: iconBg(list) }} aria-hidden="true">
+      {img ? <img src={list.icon} alt="" /> : list.icon || '📝'}
+    </span>
+  );
 }
 
 /** 共用的人裡，現在還是這趟旅行成員的（測試時加過、後來移除的手機不算） */
@@ -64,50 +75,45 @@ export function ListsTab({ ctx }: { ctx: TripCtx }) {
         <h2 className="section-title">我的清單</h2>
         <Button variant="ghost" onClick={() => setAdding(true)}><Icon.plus /> 新增清單</Button>
       </div>
-      {mine.length ? mine.map((l) => {
-        const done = checkedItems(store, l.id, user?.id);
-        const n = l.items.filter((i) => done.has(i.id)).length;
+      {mine.length ? <div className="list-grid">{mine.map((l) => {
         const pinned = isPinned(store, l.id, user?.id);
         const together = editorsOf(ctx.trip.id, l).length > 0 || l.owner_id !== user?.id;
         return (
-          <div key={l.id} className="list-card pinnable">
+          <div key={l.id} className="list-tile pinnable">
+            <div className="tile-top">
+              <ListIcon list={l} />
+              <span className="list-card-sub">{l.items.length} 項</span>
+              <PinButton pinned={pinned} title={l.title} onClick={() => pin(l, pinned)} />
+            </div>
             <button type="button" className="list-card-open" onClick={() => open(l)}>
-              <span className="list-ic" style={{ background: iconBg(l) }} aria-hidden="true">{l.icon || '📝'}</span>
-              <span className="list-card-main">
-                <span className="list-card-title">{l.title}</span>
-                <span className="list-card-sub">{l.items.length} 項{n ? `・買到 ${n} 項` : ''}</span>
-              </span>
-              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                <span className={`chip-soft${l.shared ? ' ok' : ''}`}>{l.shared ? '已分享' : together ? '共用' : '只有我看得到'}</span>
-                {together ? <span className="list-card-sub">{peopleOf(ctx.trip.id, l)}</span> : null}
-              </span>
+              <span className="list-card-title">{l.title}</span>
             </button>
-            <PinButton pinned={pinned} title={l.title} onClick={() => pin(l, pinned)} />
+            <span className={`chip-soft tile-foot${l.shared ? ' ok' : ''}`}>{l.shared ? '已分享' : together ? `共用・${peopleOf(ctx.trip.id, l)}` : '只有我看得到'}</span>
           </div>
         );
-      }) : (
+      })}</div> : (
         <Empty title="還沒有清單">想買的、想吃的、伴手禮…按「新增清單」開始記。</Empty>
       )}
 
       <div className="divider-dash" />
       <h2 className="section-title">看看別人分享的清單</h2>
-      {shared.length ? shared.map((l) => {
+      {shared.length ? <div className="list-grid">{shared.map((l) => {
         const o = ownerOf(ctx.trip.id, l.owner_id);
         const pinned = isPinned(store, l.id, user?.id);
         return (
-          <div key={l.id} className="list-card other">
+          <div key={l.id} className="list-tile other">
+            <div className="tile-top">
+              <ListIcon list={l} />
+              <span className="list-card-sub">{l.items.length} 項</span>
+              <PinButton pinned={pinned} title={l.title} onClick={() => pin(l, pinned)} />
+            </div>
             <button type="button" className="list-card-open" onClick={() => open(l)}>
-              <span className="list-ic" style={{ background: iconBg(l) }} aria-hidden="true">{l.icon || '📝'}</span>
-              <span className="list-card-main">
-                <span className="list-card-title">{l.title}</span>
-                <span className="list-card-sub">{l.items.length} 項</span>
-              </span>
-              <span className="who"><Dot color={o.color} />{peopleOf(ctx.trip.id, l)}分享</span>
+              <span className="list-card-title">{l.title}</span>
             </button>
-            <PinButton pinned={pinned} title={l.title} onClick={() => pin(l, pinned)} />
+            <span className="who tile-foot"><Dot color={o.color} />{peopleOf(ctx.trip.id, l)}分享</span>
           </div>
         );
-      }) : <p className="muted small">家人分享清單後會出現在這裡。</p>}
+      })}</div> : <p className="muted small">家人分享清單後會出現在這裡。</p>}
 
       {adding && user ? <ListNameSheet title="新增清單" onClose={() => setAdding(false)} onSave={async (title, icon) => {
         const id = await createList(store, ctx.trip.id, user.id, title, icon);
@@ -134,6 +140,8 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
 }) {
   const [name, setName] = useState(initial?.title ?? '');
   const [icon, setIcon] = useState(initial?.icon || ICONS[0]);
+  const [custom, setCustom] = useState<string | null>(isImageIcon(initial?.icon) ? initial!.icon : null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function save() {
     try {
@@ -156,7 +164,31 @@ function ListNameSheet({ title, initial, onClose, onSave }: {
           {ICONS.map((x) => (
             <button key={x} type="button" role="radio" aria-checked={icon === x} className={`emoji-btn${icon === x ? ' is-on' : ''}`} onClick={() => setIcon(x)}>{x}</button>
           ))}
+          {custom ? (
+            <button type="button" role="radio" aria-checked={icon === custom} aria-label="自己的圖片" className={`emoji-btn img${icon === custom ? ' is-on' : ''}`} onClick={() => setIcon(custom)}>
+              <img src={custom} alt="" />
+            </button>
+          ) : null}
         </div>
+        <label className="btn btn-secondary icon-upload">
+          {busy ? <span className="spinner" aria-hidden="true" /> : <Icon.camera />} {custom ? '換一張自己的圖片' : '用自己的圖片當圖示'}
+          <input type="file" accept="image/*" aria-label="選擇圖示圖片" style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} onChange={async (e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            setBusy(true);
+            try {
+              const url = await makeIcon(f);
+              setCustom(url);
+              setIcon(url);
+            } catch (err) {
+              setError((err as Error).message);
+            } finally {
+              setBusy(false);
+            }
+          }} />
+        </label>
+        <span className="field-hint">會自動裁成正方形的小圖。</span>
       </div>
       <Button variant="primary" block onClick={save}>儲存</Button>
     </Sheet>
@@ -228,7 +260,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
       right={mine ? <Button variant="ghost" onClick={() => setMenu(true)}><Icon.edit /> 編輯</Button> : null} />}>
       <div className="pad stack-sm">
         <div className="row-wrap" style={{ gap: 12, marginBottom: 6, flexWrap: 'nowrap' }}>
-          <span className="list-ic lg" style={{ background: iconBg(list) }} aria-hidden="true">{list.icon || '📝'}</span>
+          <ListIcon list={list} lg />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
             <h1 className="detail-title" style={{ fontSize: 'calc(26px + var(--fs-add))', textAlign: 'left' }}>{list.title}</h1>
             {mine ? (
@@ -273,7 +305,7 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
         <Sheet title="要編輯哪一項？" onClose={() => setMenu(false)}
           action={<Button variant="primary" onClick={() => { setMenu(false); navigate(`/t/${tripId}/l/${list.id}/i/new`); }} style={{ minHeight: 44, padding: '0 14px' }}><Icon.plus /> 新增一項</Button>}>
           <button type="button" className="row-btn li" style={{ background: '#fff3dc' }} onClick={() => { setMenu(false); setRenaming(true); }}>
-            <span className="li-main">清單名稱和圖示：{list.icon} {list.title}</span><Icon.edit />
+            <span className="li-main"><ListIcon list={list} /> 清單名稱和圖示</span><Icon.edit />
           </button>
           {list.items.map((item, i) => (
             <div key={item.id} className="li">

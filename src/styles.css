@@ -492,3 +492,20 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 /* 行程時間：不要框，只留文字 */
 .act-time { border: 0; background: none; padding-left: 0; padding-right: 0; text-align: left; min-width: 56px; }
 .act.flat .act-time { border: 0; min-width: 48px; }
+
+/* 清單：兩兩並排的方格 */
+.list-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.list-tile { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 4px; background: var(--surface); border: var(--border); border-radius: 20px; padding: 8px 6px 10px 12px; }
+.list-tile.other { background: #fffaf0; }
+.tile-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tile-top .pin-btn { margin-left: auto; position: relative; z-index: 1; width: 40px; height: 40px; }
+.list-tile .list-ic { width: 34px; height: 34px; border-radius: 10px; font-size: calc(18px + var(--fs-add)); }
+.list-tile .list-card-open { padding: 0 6px 0 0; display: block; }
+.list-tile .list-card-open::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.list-tile .list-card-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+.list-tile .tile-foot { margin-top: auto; align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-ic.img { background: var(--surface); overflow: hidden; padding: 0; }
+.list-ic.img img, .emoji-btn.img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.emoji-btn.img { padding: 0; overflow: hidden; }
+.icon-upload { position: relative; margin-top: 8px; min-height: 44px; font-size: calc(16px + var(--fs-add)); }
+.li-main .list-ic { width: 28px; height: 28px; border-radius: 8px; font-size: calc(15px + var(--fs-add)); border-width: 2px; }
