@@ -157,6 +157,16 @@ await shot('行程頁-插入路線');
 
 // ---------- 清單 ----------
 await tab('清單').click();
+// 刪除清單後回到清單頁，不會變空白
+await page.getByRole('button', { name: '新增清單' }).click();
+await page.getByLabel('清單名稱').fill('要刪掉的');
+await page.getByLabel('清單名稱').press('Enter');
+await page.getByRole('heading', { name: '要刪掉的' }).waitFor();
+await page.getByRole('button', { name: '編輯' }).click();
+await page.getByRole('button', { name: '刪除這個清單' }).click();
+await page.getByRole('button', { name: '刪除', exact: true }).click();
+await page.getByRole('button', { name: '新增清單' }).waitFor({ timeout: 5000 });
+check(await page.getByText('要刪掉的').count() === 0 && errors.length === 0, '刪除清單後回到清單頁，畫面正常');
 await page.getByRole('button', { name: '新增清單' }).click();
 await page.getByLabel('清單名稱').fill('想買的藥妝');
 await page.getByRole('radio', { name: '💊' }).click();

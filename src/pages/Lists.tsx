@@ -183,13 +183,13 @@ export function ListPage({ tripId, listId }: { tripId: string; listId: string })
   const list = store.get('lists', listId);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [collab, setCollab] = useState(false);
   const close = () => goBack(`/t/${tripId}/lists`);
 
   if (!trip || !list || list.deleted_at) {
     return <Screen header={<TopBar title="清單" left={<BackButton onClick={close} />} />}><Empty title="找不到這個清單">可能已被刪除或取消分享。</Empty></Screen>;
   }
   const mine = canEditList(list, user?.id);
-  const [collab, setCollab] = useState(false);
   const done = checkedItems(store, list.id, user?.id);
   const owner = ownerOf(tripId, list.owner_id);
 
