@@ -219,7 +219,7 @@ function FontSizeSection() {
   return (
     <Section title="字體大小">
       <Segmented label="字體大小" value={size} onChange={(v) => { setSize(v); setFontSize(v); }}
-        options={[{ value: 's', label: '小' }, { value: 'm', label: '中' }, { value: 'l', label: '大' }]} />
+        options={[{ value: 's', label: '小' }, { value: 'm', label: '中' }, { value: 'l', label: '大' }, { value: 'xl', label: '特大' }]} />
       <p className="muted tiny">只會改這支手機，關掉 App 再打開也會記住。</p>
     </Section>
   );

@@ -145,19 +145,27 @@ if (file2) {
   const fs = () => page.evaluate(() => getComputedStyle(document.body).fontSize);
   check(await fs() === '17px', '預設是小（17px）');
   await page.getByRole('radio', { name: '中' }).click();
-  check(await fs() === '19px', '中 = 大兩號');
-  await page.getByRole('radio', { name: '大' }).click();
-  check(await fs() === '21px', '大 = 再大兩號');
+  check(await fs() === '21px', '中 = 小 +4');
+  await page.getByRole('radio', { name: '大', exact: true }).click();
+  check(await fs() === '23px', '大 = 中再大兩號');
+  await page.getByRole('radio', { name: '特大' }).click();
+  check(await fs() === '25px', '特大 = 大再大兩號');
   await page.reload();
-  await page.getByRole('radio', { name: '大' }).waitFor();
-  check(await fs() === '21px' && (await page.getByRole('radio', { name: '大' }).getAttribute('aria-checked')) === 'true', '重新打開還記得「大」');
+  await page.getByRole('radio', { name: '特大' }).waitFor();
+  check(await fs() === '25px' && (await page.getByRole('radio', { name: '特大' }).getAttribute('aria-checked')) === 'true', '重新打開還記得「特大」');
+  // 舊版設成「大」的手機，升級後是新的「中」
+  await page.evaluate(() => { localStorage.removeItem('family-trip:font-size-v2'); localStorage.setItem('family-trip:font-size', 'l'); });
+  await page.reload();
+  await page.getByRole('radio', { name: '中' }).waitFor();
+  check(await fs() === '21px', '舊版的「大」變成新版的「中」');
+  await page.getByRole('radio', { name: '特大' }).click();
   await shot('字體大-設定');
   await tab('行程').click();
   await shot('字體大-行程');
   await tab('路線').click();
   await shot('字體大-路線');
   const wide = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
-  check(!wide, '字體大也不會左右超出畫面');
+  check(!wide, '字體特大也不會左右超出畫面');
   await tab('旅伴・設定').click();
   await page.getByRole('radio', { name: '小' }).click();
 }

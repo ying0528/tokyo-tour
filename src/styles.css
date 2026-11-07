@@ -1,6 +1,6 @@
 /* ===== 軟Q飯糰風格：奶油黃底、粗黑描框、糖果色卡片、按鈕有Q彈陰影 ===== */
 :root {
-  /* 字體大小：小 0、中 +2px、大 +4px（旅伴・設定裡切換，記在這支手機） */
+  /* 字體大小：小 0、中 +4px、大 +6px、特大 +8px（旅伴・設定裡切換，記在這支手機） */
   --fs-add: 0px;
   --bg: #fff4c9;
   --surface: #ffffff;
@@ -35,8 +35,9 @@
 }
 
 * { box-sizing: border-box; }
-:root[data-font="m"] { --fs-add: 2px; }
-:root[data-font="l"] { --fs-add: 4px; }
+:root[data-font="m"] { --fs-add: 4px; }
+:root[data-font="l"] { --fs-add: 6px; }
+:root[data-font="xl"] { --fs-add: 8px; }
 html, body {
   margin: 0; height: 100%; overflow: hidden;
   background: var(--bg); color: var(--ink);
