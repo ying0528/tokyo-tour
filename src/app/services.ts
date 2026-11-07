@@ -65,7 +65,8 @@ async function adoptUser(user: AuthUser | null) {
   if (user && prev && prev.id !== user.id) await store.clearAll();
   if (user) await store.setMeta('user', user);
   setSession({ user });
-  if (user) void syncer.sync();
+  // 打開 App 時，之前失敗的修改也再試一次（例如當時雲端資料庫還沒更新）
+  if (user) void syncer.sync({ retryFailed: true });
 }
 
 export async function signOut() {
