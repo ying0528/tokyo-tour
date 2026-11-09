@@ -13,8 +13,32 @@ export function Screen({ header, footer, children, className = '' }: {
   children: ReactNode;
   className?: string;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // 量底部分頁列實際佔多高（字放大、iPhone 底部安全區都算進去），內容最後就留這麼多空間
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const bar = el?.querySelector<HTMLElement>(':scope > .tabbar');
+    if (!el || !bar) return;
+    const update = () => {
+      const bottom = el.getBoundingClientRect().bottom;
+      el.style.setProperty('--tabbar-space', `${Math.max(0, Math.round(bottom - bar.getBoundingClientRect().top))}px`);
+      // 分頁列上面還有固定按鈕（路線頁「看完整地鐵圖」）的話，內容要留到那個按鈕上方
+      const tops = [...el.querySelectorAll<HTMLElement>(':scope > .tabbar, .maps-btn')].map((x) => x.getBoundingClientRect().top);
+      el.style.setProperty('--bottom-space', `${Math.max(0, Math.round(bottom - Math.min(...tops)))}px`);
+    };
+    update();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(bar);
+    ro?.observe(el);
+    const btn = el.querySelector<HTMLElement>('.maps-btn');
+    if (btn) ro?.observe(btn);
+    const mo = new MutationObserver(update);
+    mo.observe(el, { childList: true });
+    window.addEventListener('resize', update);
+    return () => { ro?.disconnect(); mo.disconnect(); window.removeEventListener('resize', update); };
+  }, [footer, className]);
   return (
-    <div className={`screen ${className}`}>
+    <div ref={ref} className={`screen ${className}`}>
       {header}
       <main className="screen-body">{children}</main>
       {footer}

@@ -139,6 +139,103 @@ if (file2) {
   await shot('換分頁後日期列');
 }
 
+// 最下面的內容不會被底部分頁列擋住
+{
+  await tab('行程').click();
+  await page.getByRole('tab', { name: /Day 2/ }).click();
+  const hidden = async () => page.evaluate(() => {
+    const body = document.querySelector('.screen-body');
+    body.scrollTop = body.scrollHeight;
+    const bar = { top: Math.min(...[...document.querySelectorAll('.tabbar, .maps-btn')].map((e) => e.getBoundingClientRect().top)) };
+    const items = [...body.querySelectorAll('.act, .flat-leg, .list-tile, .ticket, .section, button, a')].filter((e) => e.offsetParent && !e.closest('.maps-btn, .fab'));
+    const last = items.map((e) => e.getBoundingClientRect().bottom).reduce((a, b) => Math.max(a, b), 0);
+    return { last, barTop: bar.top };
+  });
+  await page.waitForTimeout(200);
+  let r = await hidden();
+  check(r.last <= r.barTop, `行程頁最下面的行程在分頁列上方（${Math.round(r.last)} ≤ ${Math.round(r.barTop)}）`);
+  for (const t of ['清單', '路線', '旅伴・設定']) {
+    await tab(t).click();
+    await page.waitForTimeout(250);
+    r = await hidden();
+    check(r.last <= r.barTop + 1, `${t}頁最下面的內容在分頁列上方（${Math.round(r.last)} ≤ ${Math.round(r.barTop)}）`);
+  }
+}
+
+// 從行程按返回，回到剛剛滑到的地方
+{
+  await tab('行程').click();
+  await page.getByRole('tab', { name: /Day 2/ }).click();
+  await page.waitForTimeout(200);
+  await page.locator('.screen-body').evaluate((el) => { el.scrollTop = 400; });
+  await page.waitForTimeout(150);
+  const before = await page.locator('.screen-body').evaluate((el) => el.scrollTop);
+  const card = page.locator('.act').filter({ visible: true }).nth(3);
+  await card.click();
+  await page.getByRole('button', { name: '返回' }).waitFor();
+  await page.getByRole('button', { name: '返回' }).click();
+  await page.getByRole('tab', { name: /Day 2/ }).waitFor();
+  await page.waitForTimeout(250);
+  const after = await page.locator('.screen-body').evaluate((el) => el.scrollTop);
+  check(before > 100 && Math.abs(after - before) < 4, `按返回回到剛剛的位置（${before} → ${after}）`);
+  await shot('返回後的位置');
+}
+
+// 左右滑動換日期
+{
+  const cdp = await context.newCDPSession(page);
+  const swipe = async (fromX, toX) => {
+    const y = 380;
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fromX, y }] });
+    for (let i = 1; i <= 5; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: fromX + ((toX - fromX) * i) / 5, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(350);
+  };
+  const sel = () => page.locator('.day-strip [aria-selected="true"]').innerText();
+  check((await sel()).includes('Day 2'), '現在是 Day 2');
+  await swipe(330, 60);
+  check((await sel()).includes('Day 3'), `往左滑 → 下一天（${(await sel()).split('\n')[0]}）`);
+  check(await page.locator('.screen-body').evaluate((el) => el.scrollTop) === 0, '換日期後從最上面開始');
+  await swipe(60, 330);
+  await swipe(60, 330);
+  check((await sel()).includes('Day 1'), '往右滑兩次 → Day 1');
+  await swipe(60, 330);
+  check((await sel()).includes('Day 1') && (await page.getByText('已經是第一天').count()) > 0, '第一天再往右滑會提示');
+  // 上下捲動不會換日期
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 200, y: 700 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 260, y: 400 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForTimeout(300);
+  check((await sel()).includes('Day 1'), '上下滑不會換日期');
+}
+
+// PDF 票券：在票券頁點一下就直接打開 PDF
+{
+  await tab('票券').click();
+  await page.getByRole('button', { name: /拍照／上傳/ }).first().click();
+  const pdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+  await page.locator('input[type=file]').setInputFiles({ name: 'ticket.pdf', mimeType: 'application/pdf', buffer: pdf });
+  await page.getByLabel('票券名稱').fill('測試 PDF 門票');
+  await page.getByRole('button', { name: '儲存' }).first().click();
+  await page.waitForTimeout(400);
+  if (await page.getByRole('button', { name: '返回' }).count()) await page.getByRole('button', { name: '返回' }).first().click();
+  await tab('票券').click();
+  const link = page.getByRole('link', { name: '打開「測試 PDF 門票」的 PDF' });
+  await link.waitFor({ timeout: 5000 });
+  const href = await link.getAttribute('href');
+  check(href?.startsWith('blob:') && (await link.getAttribute('target')) === '_blank', 'PDF 票券的卡片直接連到 PDF');
+  const [popup] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), link.click()]);
+  check(Boolean(popup), '點卡片就打開 PDF（不用再進一頁）');
+  await popup.close();
+  await page.locator('.ticket-wrap', { hasText: '測試 PDF 門票' }).getByRole('button', { name: '詳情' }).click();
+  await page.getByText('打開 PDF').waitFor();
+  check(true, '「詳情」可以進票券頁編輯');
+  await shot('PDF票券-詳情');
+  await page.getByRole('button', { name: '返回' }).first().click();
+  await tab('票券').click();
+  await shot('PDF票券-卡片');
+}
+
 // 字體大小：小中大，重新打開還記得
 {
   await tab('旅伴・設定').click();

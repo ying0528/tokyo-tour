@@ -29,8 +29,9 @@ export function TicketCard({ t, ctx }: { t: Ticket; ctx: TripCtx }) {
   const holders = t.traveler_ids.map((id) => ctx.travelers.find((x) => x.id === id)?.name).filter(Boolean);
   const cached = store.hasFile(t.file_path);
   const pendingUpload = t.file_path ? store.pendingUploads().includes(t.file_path) : false;
-  return (
-    <button type="button" className="ticket" onClick={() => navigate(`/t/${t.trip_id}/tk/${t.id}`)}>
+  const pdf = useFileUrl(t.file_type === 'pdf' ? t.file_path : null);
+  const inner = (
+    <>
       <span className="ticket-main">
         {t.kind.trim() ? <span className="tag" style={{ alignSelf: 'flex-start', background: 'var(--pink)' }}>{t.kind}</span> : null}
         <span style={{ fontSize: 'calc(19px + var(--fs-add))', overflowWrap: 'anywhere' }}>{t.title}</span>
@@ -44,7 +45,19 @@ export function TicketCard({ t, ctx }: { t: Ticket; ctx: TripCtx }) {
         ) : <span className="tiny muted">還沒有圖片</span>}
       </span>
       <span className="ticket-stub"><Thumb t={t} /></span>
-    </button>
+    </>
+  );
+  // PDF 票券：點一下直接打開 PDF；右上角「詳情」再進票券頁
+  if (pdf.url) {
+    return (
+      <div className="ticket-wrap">
+        <a className="ticket" href={pdf.url} target="_blank" rel="noopener noreferrer" aria-label={`打開「${t.title}」的 PDF`}>{inner}</a>
+        <button type="button" className="ticket-more" onClick={() => navigate(`/t/${t.trip_id}/tk/${t.id}`)}>詳情</button>
+      </div>
+    );
+  }
+  return (
+    <button type="button" className="ticket" onClick={() => navigate(`/t/${t.trip_id}/tk/${t.id}`)}>{inner}</button>
   );
 }
 

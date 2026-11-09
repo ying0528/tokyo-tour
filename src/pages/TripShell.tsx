@@ -1,5 +1,5 @@
 // 旅行主畫面：上方旅行名稱與同步狀態、下方四個分頁
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { store, syncer, useData, useSession, useSync } from '../app/services.ts';
 import { navigate } from '../app/router.ts';
@@ -25,6 +25,9 @@ const TABS: { key: TabKey; label: string; icon: () => ReactNode }[] = [
   { key: 'settings', label: '旅伴・設定', icon: Icon.people },
 ];
 
+/** 每一頁捲到哪裡（關掉 App 前都記得） */
+const scrollMemo = new Map<string, number>();
+
 export function TripShell({ tripId, tab, sub }: { tripId: string; tab: TabKey; sub?: string }) {
   useData();
   const sync = useSync();
@@ -37,11 +40,27 @@ export function TripShell({ tripId, tab, sub }: { tripId: string; tab: TabKey; s
     }
   }, [tripId]);
 
-  // 換分頁時回到最上面（不然會停在上一頁捲到的位置，日期列被藏起來）
-  useEffect(() => {
-    document.querySelector('.screen-body')?.scrollTo(0, 0);
+  // 捲動位置：從行程詳情按返回時回到剛剛滑到的地方；換分頁、換日期才回到最上面
+  const mounted = useRef(false);
+  const hasTrip = Boolean(trip);
+  useLayoutEffect(() => {
+    const body = document.querySelector<HTMLElement>('.screen-body');
+    if (!body || !hasTrip) return;
+    const key = `${tripId}/${tab}/${sub ?? ''}`;
+    const saved = scrollMemo.get(key) ?? 0;
+    if (!mounted.current && saved > 0) {
+      body.scrollTop = saved;
+      // 圖片等載入後高度可能變，下一個畫格再確認一次
+      requestAnimationFrame(() => { if (body.scrollTop < saved) body.scrollTop = saved; });
+    } else {
+      body.scrollTop = 0;
+    }
     if (window.scrollY) window.scrollTo(0, 0);
-  }, [tab]);
+    mounted.current = true;
+    const onScroll = () => scrollMemo.set(key, body.scrollTop);
+    body.addEventListener('scroll', onScroll, { passive: true });
+    return () => body.removeEventListener('scroll', onScroll);
+  }, [tripId, tab, sub, hasTrip]);
 
   if (!trip || trip.deleted_at) {
     const loading = !trip && sync.status === 'syncing';
@@ -86,5 +105,5 @@ export function TripShell({ tripId, tab, sub }: { tripId: string; tab: TabKey; s
   else if (tab === 'tickets') body = <TicketsTab ctx={ctx} />;
   else body = <SettingsTab trip={trip} />;
 
-  return <Screen header={header} footer={footer} className={`has-tabbar${tab === 'routes' ? ' has-maps-btn' : ''}`}>{body}</Screen>;
+  return <Screen header={header} footer={footer} className={`has-tabbar${tab === 'routes' ? ' has-maps-btn' : ''}${tab === 'plan' ? ' has-fab' : ''}`}>{body}</Screen>;
 }

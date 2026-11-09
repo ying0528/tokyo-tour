@@ -61,7 +61,8 @@ a { color: var(--ink); }
   flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch; padding-bottom: calc(28px + var(--safe-bottom));
 }
-.has-tabbar .screen-body { padding-bottom: 96px; }
+/* 底部分頁列佔的高度（含 iPhone 底部安全區）由程式量好放在 --tabbar-space，內容最後要留這麼多空間才不會被擋住 */
+.has-tabbar .screen-body { padding-bottom: calc(var(--bottom-space, var(--tabbar-space, calc(96px + var(--safe-bottom)))) + 28px); }
 
 .topbar {
   flex: 0 0 auto; display: grid; grid-template-columns: minmax(64px, auto) 1fr minmax(64px, auto);
@@ -139,7 +140,7 @@ a { color: var(--ink); }
 .link-btn { background: none; border: 0; color: var(--ink); cursor: pointer; padding: 8px 4px; font-size: calc(16px + var(--fs-add)); text-decoration: underline; text-underline-offset: 3px; }
 .link-btn.inline { padding: 0; }
 .fab {
-  position: absolute; right: 18px; bottom: calc(96px + var(--safe-bottom)); z-index: 3;
+  position: absolute; right: 18px; bottom: calc(var(--tabbar-space, calc(84px + var(--safe-bottom))) + 12px); z-index: 3;
   width: 64px; height: 64px; border-radius: 50%; border: var(--border); background: var(--sky);
   box-shadow: 0 5px 0 var(--ink); display: grid; place-items: center; cursor: pointer;
 }
@@ -302,6 +303,9 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 
 /* ===== 票券 ===== */
 .ticket { display: flex; width: 100%; background: var(--surface); border: var(--border); border-radius: 24px; overflow: hidden; text-align: left; cursor: pointer; padding: 0; }
+.ticket-wrap { position: relative; }
+.ticket-wrap .ticket { color: inherit; text-decoration: none; }
+.ticket-more { position: absolute; top: 10px; right: 114px; border: 2px solid var(--ink); border-radius: 999px; background: var(--surface); padding: 2px 10px; font-size: calc(13px + var(--fs-add)); cursor: pointer; color: var(--ink); }
 .ticket-main { flex: 1 1 auto; min-width: 0; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .ticket-stub { flex: 0 0 104px; border-left: 3px dashed var(--ink); display: grid; place-items: center; background: #fff8df; padding: 8px; }
 .ticket-thumb { width: 84px; height: 84px; border: var(--border); border-radius: 12px; background: var(--surface); object-fit: cover; display: grid; place-items: center; font-family: var(--num); font-weight: 700; overflow: hidden; }
@@ -438,8 +442,8 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .pill-btn { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 12px; border-radius: 999px; border: var(--border); background: var(--surface); box-shadow: 0 3px 0 var(--ink); color: var(--ink); text-decoration: none; font-size: calc(15px + var(--fs-add)); cursor: pointer; white-space: nowrap; }
 .transfer-note { display: flex; align-items: center; gap: 8px; padding: 0 6px; font-size: calc(14px + var(--fs-add)); color: var(--ink-2); }
 .transfer-note::before { content: ""; width: 4px; height: 22px; border-left: 4px dotted var(--ink); margin-left: 14px; flex: 0 0 auto; }
-.maps-btn { position: absolute; left: 16px; right: 16px; bottom: calc(96px + var(--safe-bottom)); z-index: 3; }
-.has-maps-btn .screen-body { padding-bottom: 160px; }
+.maps-btn { position: absolute; left: 16px; right: 16px; bottom: calc(var(--tabbar-space, calc(84px + var(--safe-bottom))) + 12px); z-index: 3; }
+.has-maps-btn .screen-body { padding-bottom: calc(var(--bottom-space, calc(170px + var(--safe-bottom))) + 28px); }
 .mode-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .line-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .line-opt { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 4px 10px; border: 2px solid var(--soft-line); border-radius: 14px; background: var(--surface); text-align: left; cursor: pointer; font-size: calc(15px + var(--fs-add)); }
@@ -512,3 +516,15 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .li-main .list-ic { width: 28px; height: 28px; border-radius: 8px; font-size: calc(15px + var(--fs-add)); border-width: 2px; }
 .emoji-cell { position: relative; display: grid; }
 .emoji-del { position: absolute; top: -6px; right: -6px; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--ink); background: #ffd6d6; color: #8e1a20; font-size: 13px; line-height: 1; display: grid; place-items: center; cursor: pointer; padding: 0; z-index: 1; }
+.ticket-wrap .ticket-main > :first-child { margin-right: 58px; }
+
+/* 行程頁右下角有「＋」：最後一個行程要能捲到它上面 */
+.has-fab .screen-body { padding-bottom: calc(var(--tabbar-space, calc(96px + var(--safe-bottom))) + 96px); }
+
+/* 行程頁左右滑動換日期：新的一天從滑動的方向進來 */
+.day-swipe { touch-action: pan-y; }
+.day-swipe.from-right { animation: day-in-right .22s ease-out; }
+.day-swipe.from-left { animation: day-in-left .22s ease-out; }
+@keyframes day-in-right { from { transform: translateX(36px); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes day-in-left { from { transform: translateX(-36px); opacity: .3; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .day-swipe.from-right, .day-swipe.from-left { animation: none; } }

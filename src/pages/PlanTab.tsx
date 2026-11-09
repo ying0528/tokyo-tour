@@ -1,6 +1,7 @@
 // 行程分頁：每天一個分頁（Day 1 11/21（六）…），依時間自動排序；分組的日子各看各的組
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { toast } from '../ui/dialog.tsx';
 import { store } from '../app/services.ts';
 import { navigate } from '../app/router.ts';
 import { canEditGroup, dayView, myTickets, setViewGroup, useViewVersion } from '../app/tripContext.ts';
@@ -29,6 +30,9 @@ function label(a: Activity) {
   return `${a.start_time ? `${hhmm(a.start_time)} ` : ''}${activityName(a, store.get('places', a.place_id))}`;
 }
 
+/** 換日期的方向（滑入動畫用） */
+const swipeDir: { current: 'left' | 'right' | null } = { current: null };
+
 export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
   useViewVersion();
   useMinute();
@@ -56,6 +60,37 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
   }
   const openLeg = (v: LegView) => navigate(`/t/${trip.id}/leg/${v.id}`);
   const canAdd = canEditGroup(ctx, selected, view.split ? view.group : null);
+
+  // 左右滑動換日期：往左滑看下一天、往右滑看前一天
+  const touch = useRef<{ x: number; y: number; t: number } | null>(null);
+  const dir = swipeDir.current;
+  useEffect(() => { swipeDir.current = null; }, [selected]);
+  const goDay = (step: 1 | -1) => {
+    const i = days.indexOf(selected) + step;
+    if (i < 0 || i >= days.length) {
+      toast(step > 0 ? '已經是最後一天' : '已經是第一天');
+      return;
+    }
+    swipeDir.current = step > 0 ? 'right' : 'left';
+    navigate(`/t/${trip.id}/plan/${days[i]}`, { replace: true });
+  };
+  const swipe = {
+    onTouchStart: (e: { touches: TouchList; target: EventTarget }) => {
+      const p = e.touches[0];
+      // 在可以左右捲動的東西上滑（例如圖片）就不換日期
+      const scroller = (e.target as HTMLElement).closest('.no-swipe');
+      touch.current = e.touches.length === 1 && !scroller ? { x: p.clientX, y: p.clientY, t: Date.now() } : null;
+    },
+    onTouchEnd: (e: { changedTouches: TouchList }) => {
+      const s0 = touch.current;
+      touch.current = null;
+      if (!s0) return;
+      const p = e.changedTouches[0];
+      const dx = p.clientX - s0.x;
+      const dy = p.clientY - s0.y;
+      if (Date.now() - s0.t < 700 && Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.6) goDay(dx < 0 ? 1 : -1);
+    },
+  };
   const outside = store.byTrip('activities', trip.id).filter((a) => a.date < trip.start_date || a.date > trip.end_date).length;
 
   // 提醒：依手機現在的日期與時間，顯示目前行程和下一個行程
@@ -104,9 +139,9 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
 
   return (
     <div className="plan">
-      <DayStrip days={days} selected={selected} today={now.date} onPick={(d) => navigate(`/t/${trip.id}/plan/${d}`, { replace: true })} />
+      <DayStrip days={days} selected={selected} today={now.date} onPick={(d) => { swipeDir.current = null; navigate(`/t/${trip.id}/plan/${d}`, { replace: true }); }} />
 
-      <div className="pad stack">
+      <div key={selected} className={`pad stack day-swipe${dir ? ` from-${dir}` : ''}`} {...swipe}>
         <div className="day-bar">
           <div className="bubble" aria-live="polite">{reminder}</div>
           {ctx.editable ? (
