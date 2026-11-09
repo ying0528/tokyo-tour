@@ -75,13 +75,13 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
     navigate(`/t/${trip.id}/plan/${days[i]}`, { replace: true });
   };
   const swipe = {
-    onTouchStart: (e: { touches: TouchList; target: EventTarget }) => {
+    onTouchStart: (e: { touches: { length: number; [i: number]: { clientX: number; clientY: number } }; target: EventTarget }) => {
       const p = e.touches[0];
       // 在可以左右捲動的東西上滑（例如圖片）就不換日期
       const scroller = (e.target as HTMLElement).closest('.no-swipe');
       touch.current = e.touches.length === 1 && !scroller ? { x: p.clientX, y: p.clientY, t: Date.now() } : null;
     },
-    onTouchEnd: (e: { changedTouches: TouchList }) => {
+    onTouchEnd: (e: { changedTouches: { [i: number]: { clientX: number; clientY: number } } }) => {
       const s0 = touch.current;
       touch.current = null;
       if (!s0) return;
