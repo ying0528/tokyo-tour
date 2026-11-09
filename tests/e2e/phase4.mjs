@@ -102,8 +102,11 @@ check((await page.locator('.leg-card').nth(1).innerText()).includes('明治神�
 await shot('路線頁-自動產生');
 
 await page.locator('.leg-card').nth(1).getByRole('button', { name: '設定路線' }).click();
+await page.getByText('第 1 步').waitFor();
+check(await page.getByText('第 2 步').count() === 0, '新增路線預設只有第 1 步');
+// 再加一步地鐵：從清單選銀座線
+await page.locator('.mode-grid').getByRole('button', { name: /地鐵/ }).click();
 await page.getByText('第 2 步').waitFor();
-// 第 2 步是地鐵：從清單選銀座線
 await page.getByRole('button', { name: /選路線/ }).click();
 await page.getByLabel('搜尋路線或車站').fill('銀座');
 await page.locator('.sheet .line-opt').filter({ hasText: /^G銀座線$/ }).click();

@@ -622,7 +622,7 @@ export function LegForm({ tripId, legId }: { tripId: string; legId: string }) {
   const rail = useRail(Boolean(trip && isJapan(trip)));
   const [plans, setPlans] = useState<LegPlan[]>(() => {
     const ps = legPlans(leg);
-    return ps.length && ps.some((p) => p.steps.length) ? structuredClone(ps) : [{ id: crypto.randomUUID(), label: '', steps: [newStep('walk'), newStep('rail'), newStep('walk')] }];
+    return ps.length && ps.some((p) => p.steps.length) ? structuredClone(ps) : [{ id: crypto.randomUUID(), label: '', steps: [newStep('walk')] }];
   });
   const [cur, setCur] = useState(0);
   const [startTime, setStartTime] = useState(leg?.start_time ? leg.start_time.slice(0, 5) : '');
@@ -676,7 +676,7 @@ export function LegForm({ tripId, legId }: { tripId: string; legId: string }) {
               <button key={p.id} type="button" aria-pressed={i === cur} className={`chip${i === cur ? ' is-on' : ''}`} style={i === cur ? { background: 'var(--pink)' } : undefined}
                 onClick={() => setCur(i)}>{planLabel(p, i)}</button>
             ))}
-            <button type="button" className="chip" style={{ borderStyle: 'dashed' }} onClick={() => { setPlans((ps) => [...ps, { id: crypto.randomUUID(), label: '', steps: [newStep('walk'), newStep('rail'), newStep('walk')] }]); setCur(plans.length); }}>
+            <button type="button" className="chip" style={{ borderStyle: 'dashed' }} onClick={() => { setPlans((ps) => [...ps, { id: crypto.randomUUID(), label: '', steps: [newStep('walk')] }]); setCur(plans.length); }}>
               ＋ 新增方案
             </button>
           </div>
