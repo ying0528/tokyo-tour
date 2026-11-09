@@ -1,5 +1,6 @@
 // 從下方滑出的面板（新增路線、沿途路線圖、清單編輯…）
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { ReactNode } from 'react';
 import { Icon } from './icons.tsx';
 
@@ -21,7 +22,8 @@ export function Sheet({ title, subtitle, onClose, children, tall, footer, action
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  return (
+  // 放在最外層（不放在可以捲動的內容裡）：iPhone 上才不會被底部分頁列蓋住
+  return createPortal(
     <div className="sheet-backdrop" onClick={onClose}>
       <div ref={ref} tabIndex={-1} className={`sheet${tall ? ' tall' : ''}`} role="dialog" aria-modal="true" aria-label={title}
         onClick={(e) => e.stopPropagation()}>
@@ -38,6 +40,7 @@ export function Sheet({ title, subtitle, onClose, children, tall, footer, action
         <div className="sheet-body">{children}</div>
         {footer ? <div className="sheet-foot">{footer}</div> : null}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

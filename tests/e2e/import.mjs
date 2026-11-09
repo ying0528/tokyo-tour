@@ -236,6 +236,25 @@ if (file2) {
   await shot('PDF票券-卡片');
 }
 
+// 下方滑出的面板蓋在分頁列上面，最下面也看得到
+{
+  await tab('路線').click();
+  await page.getByRole('button', { name: '新增路線' }).first().click();
+  const dlg = page.getByRole('dialog', { name: '新增路線' });
+  await dlg.waitFor();
+  await page.waitForTimeout(400); // 等滑出動畫結束
+  const res = await page.evaluate(() => {
+    const body = document.querySelector('.sheet-body');
+    body.scrollTop = body.scrollHeight;
+    const r = body.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.bottom - 6);
+    return { hit: hit?.className, inSheet: Boolean(hit?.closest('.sheet')), parent: document.querySelector('.sheet-backdrop').parentElement.tagName };
+  });
+  check(res.inSheet && res.parent === 'BODY', `面板最下面沒有被分頁列擋住（${JSON.stringify(res)}）`);
+  await shot('新增路線面板');
+  await dlg.getByRole('button', { name: '關閉' }).click();
+}
+
 // 字體大小：小中大，重新打開還記得
 {
   await tab('旅伴・設定').click();
