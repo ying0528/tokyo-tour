@@ -13,7 +13,7 @@ import { dayLegs } from '../lib/legs.ts';
 import type { LegView } from '../lib/legs.ts';
 import { DayStrip, phoneNow } from '../ui/DayStrip.tsx';
 import { FlatLeg } from './Routes.tsx';
-import { groupName, hhmm, isForEveryone, sortActivities, visibleIn } from '../lib/plan.ts';
+import { currentActivityId, groupName, hhmm, isForEveryone, sortActivities, visibleIn } from '../lib/plan.ts';
 import { ActivityCard } from '../ui/ActivityCard.tsx';
 import { Empty } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
@@ -90,6 +90,9 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
   };
   const outside = store.byTrip('activities', trip.id).filter((a) => a.date < trip.start_date || a.date > trip.end_date).length;
 
+  // 現在進行到的行程（綠色框）：旅行開始前框第一天第一個；當天框最後一個已經開始的（還沒開始就框第一個）
+  const currentId = currentActivityId(shown, days, selected, now);
+
   // 天氣：看這天（分組時看目前選的這組）的行程在哪裡
   const spot = spotForDay(shown.length ? shown : all, trip.destination);
 
@@ -106,7 +109,7 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
     }
     prevShared = shared;
     for (const v of legBefore.get(a.id) ?? []) items.push(<FlatLeg key={`lb-${v.id}`} v={v} onClick={() => openLeg(v)} />);
-    items.push(<ActivityCard key={a.id} a={a} ticketCount={ticketCount(a.id)} onClick={() => navigate(`/t/${trip.id}/a/${a.id}`)} />);
+    items.push(<ActivityCard key={a.id} a={a} current={a.id === currentId} ticketCount={ticketCount(a.id)} onClick={() => navigate(`/t/${trip.id}/a/${a.id}`)} />);
     for (const v of legAfter.get(a.id) ?? []) items.push(<FlatLeg key={`la-${v.id}`} v={v} onClick={() => openLeg(v)} />);
   });
   for (const v of looseLegs) items.push(<FlatLeg key={`lx-${v.id}`} v={v} onClick={() => openLeg(v)} />);

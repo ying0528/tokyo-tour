@@ -18,8 +18,10 @@ export function activitySub(a: Activity): string {
   return first.length > 40 ? `${first.slice(0, 40)}…` : first;
 }
 
-export function ActivityCard({ a, ticketCount, onClick, showDate }: {
+export function ActivityCard({ a, ticketCount, onClick, showDate, current }: {
   a: Activity;
+  /** 現在進行到的行程（綠色框） */
+  current?: boolean;
   /** 我在這筆行程的票券數 */
   ticketCount: number;
   onClick: () => void;
@@ -30,7 +32,7 @@ export function ActivityCard({ a, ticketCount, onClick, showDate }: {
   const sub = activitySub(a);
   const flat = a.kind === 'move';
   return (
-    <button type="button" className={`act${flat ? ' flat' : ''}`} onClick={onClick}>
+    <button type="button" className={`act${flat ? ' flat' : ''}${current ? ' is-now' : ''}`} onClick={onClick} aria-current={current ? 'step' : undefined}>
       {a.start_time ? <span className="act-time">{hhmm(a.start_time)}</span> : <span className="act-time blank" aria-hidden="true">00:00</span>}
       <span className="act-main">
         <span className="act-title">{name}</span>

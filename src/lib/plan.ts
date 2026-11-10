@@ -216,3 +216,24 @@ export function mapLink(place: Pick<Place, 'map_url' | 'name' | 'address'> | und
   const q = (place?.address?.trim() || place?.name?.trim() || fallbackName.trim());
   return q ? `https://map.naver.com/p/search/${encodeURIComponent(q)}` : null;
 }
+
+/**
+ * 現在進行到的行程（行程頁用綠色框起來）
+ * - 旅行開始前：第一天的第一個
+ * - 旅行中：今天最後一個已經開始的；今天還沒開始就是今天第一個
+ * - 旅行結束後：沒有
+ * shown 是這天（這組）已經排好順序的行程；沒有時間的行程跟著前面那個的時間
+ */
+export function currentActivityId(shown: { id: string; start_time: string | null }[], days: string[], selected: string, now: { date: string; time: string }): string | null {
+  if (!days.length || !shown.length || now.date > days[days.length - 1]) return null;
+  const target = now.date < days[0] ? days[0] : now.date;
+  if (selected !== target) return null;
+  if (now.date < days[0]) return shown[0].id;
+  let t = '';
+  let cur: string | null = null;
+  for (const a of shown) {
+    if (a.start_time) t = a.start_time.slice(0, 5);
+    if (t && t <= now.time) cur = a.id;
+  }
+  return cur ?? shown[0].id;
+}

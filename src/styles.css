@@ -536,3 +536,7 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 .wx-temp { font-family: var(--num); font-size: calc(22px + var(--fs-add)); white-space: nowrap; }
 .wx-to { margin: 0 2px; color: var(--ink-2); }
 .wx-pop { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-family: var(--num); font-size: calc(17px + var(--fs-add)); color: #1d6fa5; white-space: nowrap; }
+
+/* 現在進行到的行程：綠色粗框 */
+.act.is-now { border-color: #2e9d5b; box-shadow: 0 0 0 2px #2e9d5b; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

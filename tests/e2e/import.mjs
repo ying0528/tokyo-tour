@@ -288,7 +288,14 @@ if (file2) {
   check(a.includes('9°') && b.includes('2°') && b.includes('12°') && b.includes('10%'), `分組看各自的天氣（迪士尼 ${a.replace(/\n/g, ' ')}／河口湖 ${b.replace(/\n/g, ' ')}）`);
   await shot('天氣-河口湖組');
   await page.getByRole('tab', { name: /Day 1/ }).click();
+  const nowCards = await page.locator('.act.is-now').allInnerTexts();
+  check(nowCards.length === 1 && nowCards[0].includes('松山機場出發'), `出發前：綠框框第一天第一個（${nowCards.join('／')}）`);
+  const green = await page.locator('.act.is-now').evaluate((el) => getComputedStyle(el).borderTopColor);
+  check(green === 'rgb(46, 157, 91)', `綠色框（${green}）`);
   await shot('天氣-Day1');
+  await page.getByRole('tab', { name: /Day 2/ }).click();
+  check(await page.locator('.act.is-now').count() === 0, '其他天不框');
+  await page.getByRole('tab', { name: /Day 1/ }).click();
   // 打開 App：行程頁從第一天（還沒出發）開始，不停在上次看的日期
   await page.getByRole('tab', { name: /Day 3/ }).click();
   await page.reload();
