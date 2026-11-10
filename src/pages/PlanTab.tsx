@@ -2,17 +2,18 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from '../ui/dialog.tsx';
+import { spotForDay, weatherIcon, type Spot } from '../lib/weather.ts';
+import { useWeather } from '../ui/useWeather.ts';
 import { store } from '../app/services.ts';
 import { navigate } from '../app/router.ts';
 import { canEditGroup, dayView, myTickets, setViewGroup, useViewVersion } from '../app/tripContext.ts';
 import type { TripCtx } from '../app/tripContext.ts';
-import type { Activity } from '../data/types.ts';
 import { tripDays } from '../lib/dates.ts';
 import { dayLegs } from '../lib/legs.ts';
 import type { LegView } from '../lib/legs.ts';
 import { DayStrip, phoneNow } from '../ui/DayStrip.tsx';
 import { FlatLeg } from './Routes.tsx';
-import { activityName, groupName, hhmm, isForEveryone, sortActivities, visibleIn } from '../lib/plan.ts';
+import { groupName, hhmm, isForEveryone, sortActivities, visibleIn } from '../lib/plan.ts';
 import { ActivityCard } from '../ui/ActivityCard.tsx';
 import { Empty } from '../ui/kit.tsx';
 import { Icon } from '../ui/icons.tsx';
@@ -24,10 +25,6 @@ function useMinute() {
     const id = setInterval(() => setTick((x) => x + 1), 60_000);
     return () => clearInterval(id);
   }, []);
-}
-
-function label(a: Activity) {
-  return `${a.start_time ? `${hhmm(a.start_time)} ` : ''}${activityName(a, store.get('places', a.place_id))}`;
 }
 
 /** 換日期的方向（滑入動畫用） */
@@ -93,31 +90,8 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
   };
   const outside = store.byTrip('activities', trip.id).filter((a) => a.date < trip.start_date || a.date > trip.end_date).length;
 
-  // 提醒：依手機現在的日期與時間，顯示目前行程和下一個行程
-  let reminder: ReactNode;
-  const timed = shown.filter((a) => a.start_time);
-  if (!shown.length) {
-    reminder = <span>{all.length ? '這組這天沒有自己的行程' : canAdd ? '這天還沒有行程，按 ＋ 新增' : '這天還沒有行程'}</span>;
-  } else if (selected === now.date) {
-    const current = [...timed].reverse().find((a) => hhmm(a.start_time) <= now.time);
-    const next = timed.find((a) => hhmm(a.start_time) > now.time);
-    reminder = (
-      <>
-        {current ? <span><span className="now-dot" aria-hidden="true" />現在：{label(current)}</span> : <span>今天還沒開始</span>}
-        {next ? <span className="muted">下一個：{label(next)}</span> : current ? <span className="muted">今天最後一個行程了</span> : null}
-      </>
-    );
-  } else if (selected < now.date) {
-    reminder = <span className="muted">這天已經過了，共 {shown.length} 個行程</span>;
-  } else {
-    const first = timed[0] ?? shown[0];
-    reminder = (
-      <>
-        <span>這天第一個：{label(first)}</span>
-        {shown.length > 1 ? <span className="muted">共 {shown.length} 個行程</span> : null}
-      </>
-    );
-  }
+  // 天氣：看這天（分組時看目前選的這組）的行程在哪裡
+  const spot = spotForDay(shown.length ? shown : all, trip.destination);
 
   // 分組的日子：在「開始分開」與「重新會合」的地方加上提示
   const items: ReactNode[] = [];
@@ -143,7 +117,7 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
 
       <div key={selected} className={`pad stack day-swipe${dir ? ` from-${dir}` : ''}`} {...swipe}>
         <div className="day-bar">
-          <div className="bubble" aria-live="polite">{reminder}</div>
+          <WeatherBubble spot={spot} date={selected} today={now.date} timezone={trip.timezone} />
           {ctx.editable ? (
             <button type="button" className="btn btn-secondary" style={{ minHeight: 44, padding: '0 12px', fontSize: 'calc(15px + var(--fs-add))', flex: '0 0 auto', alignSelf: 'center' }}
               onClick={() => navigate(`/t/${trip.id}/day/${selected}`)}>
@@ -183,6 +157,22 @@ export function PlanTab({ ctx, date }: { ctx: TripCtx; date?: string }) {
           <Icon.plus />
         </button>
       ) : null}
+    </div>
+  );
+}
+
+function WeatherBubble({ spot, date, today, timezone }: { spot: Spot; date: string; today: string; timezone: string }) {
+  const w = useWeather(spot, date, today, timezone);
+  if (w.kind !== 'ok') {
+    const text = w.kind === 'later' ? '天氣預報約在 16 天內出現' : w.kind === 'none' ? '沒有這天的天氣紀錄' : w.kind === 'offline' ? '連上網路後顯示天氣' : '天氣載入中…';
+    return <div className="bubble weather muted" aria-live="polite">{text}</div>;
+  }
+  const { icon, label } = weatherIcon(w.day.code);
+  return (
+    <div className="bubble weather" role="group" aria-label={`${spot.name || '這裡'}天氣：${label}，${w.day.min} 到 ${w.day.max} 度${w.day.pop != null ? `，降雨機率 ${w.day.pop}%` : ''}`}>
+      <span className="wx-icon" aria-hidden="true">{icon}</span>
+      <span className="wx-temp">{w.day.min}°<span className="wx-to">–</span>{w.day.max}°</span>
+      {w.day.pop != null ? <span className="wx-pop"><span aria-hidden="true">☔</span>{w.day.pop}%</span> : null}
     </div>
   );
 }

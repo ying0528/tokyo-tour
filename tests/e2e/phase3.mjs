@@ -138,12 +138,12 @@ check(t.includes('GU') && !t.includes('① 神宮通公園廁所') && t.includes
 const tags = await page.locator('.act').filter({ hasText: 'GU' }).locator('.tag').allInnerTexts();
 check(JSON.stringify(tags) === JSON.stringify(['景點']), `行程右邊只寫類型（${tags.join('、')}）`);
 
-// ---------- 提醒欄：現在／下一個 ----------
-const bubble = await page.locator('.day-bar .bubble').innerText();
-check(bubble.includes('現在：13:00 GU') && bubble.includes('下一個：18:00 一蘭拉麵'), `提醒欄依手機時間顯示現在與下一個（${bubble.replace(/\n/g, '／')}）`);
+// ---------- 日期下面改放天氣（測試環境沒網路：顯示提示） ----------
+const bubble = await page.locator('.day-bar .bubble.weather').innerText();
+check(!bubble.includes('個行程') && !bubble.includes('現在：'), `日期下面是天氣（${bubble.replace(/\n/g, '／')}）`);
 const bar = await page.locator('.day-bar .bubble').boundingBox();
 const btn = await page.getByRole('button', { name: '分組設定' }).boundingBox();
-check(bar.x < btn.x && Math.abs((bar.y + bar.height / 2) - (btn.y + btn.height / 2)) < 20, '提醒欄在「分組設定」左邊');
+check(bar.x < btn.x && Math.abs((bar.y + bar.height / 2) - (btn.y + btn.height / 2)) < 20, '天氣在「分組設定」左邊');
 await shot('行程頁');
 
 // ---------- 詳情：沒有誰參加，地圖與連結 ----------

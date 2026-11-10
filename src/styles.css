@@ -528,3 +528,11 @@ input[type="date"].input, input[type="time"].input { min-width: 0; font-family: 
 @keyframes day-in-right { from { transform: translateX(36px); opacity: .3; } to { transform: none; opacity: 1; } }
 @keyframes day-in-left { from { transform: translateX(-36px); opacity: .3; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .day-swipe.from-right, .day-swipe.from-left { animation: none; } }
+
+/* 行程頁上方的天氣 */
+.day-bar .bubble.weather { flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; min-height: 56px; background: #e3f4fb; }
+.day-bar .bubble.weather.muted { background: var(--surface); color: var(--ink-2); font-size: calc(14px + var(--fs-add)); }
+.wx-icon { font-size: calc(30px + var(--fs-add)); line-height: 1; }
+.wx-temp { font-family: var(--num); font-size: calc(22px + var(--fs-add)); white-space: nowrap; }
+.wx-to { margin: 0 2px; color: var(--ink-2); }
+.wx-pop { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-family: var(--num); font-size: calc(17px + var(--fs-add)); color: #1d6fa5; white-space: nowrap; }

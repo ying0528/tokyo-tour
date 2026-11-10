@@ -8,6 +8,20 @@ mkdirSync(out, { recursive: true });
 const browser = await chromium.launch();
 const context = await browser.newContext({ ...devices['iPhone 13'], locale: 'zh-TW', timezoneId: 'Asia/Tokyo', deviceScaleFactor: 2 });
 const page = await context.newPage();
+// 天氣：測試時用假的預報（河口湖比較冷），並記錄問了哪些地點
+const weatherAsked = [];
+await context.route('https://api.open-meteo.com/**', async (route) => {
+  const u = new URL(route.request().url());
+  const lat = Number(u.searchParams.get('latitude'));
+  weatherAsked.push(lat);
+  const cold = lat < 35.55 && lat > 35.45;
+  const time = ['2026-11-21', '2026-11-22', '2026-11-23', '2026-11-24', '2026-11-25', '2026-11-26', '2026-11-27'];
+  await route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ daily: {
+    time, weather_code: time.map(() => (cold ? 0 : 61)),
+    temperature_2m_max: time.map(() => (cold ? 12.2 : 16.4)), temperature_2m_min: time.map(() => (cold ? 2.1 : 9.4)),
+    precipitation_probability_max: time.map(() => (cold ? 10 : 60)),
+  } }) });
+});
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 let n = 0;
@@ -253,6 +267,34 @@ if (file2) {
   check(res.inSheet && res.parent === 'BODY', `面板最下面沒有被分頁列擋住（${JSON.stringify(res)}）`);
   await shot('新增路線面板');
   await dlg.getByRole('button', { name: '關閉' }).click();
+}
+
+// 天氣：放在日期下面，只有溫度、圖示、降雨機率；分組時跟著切換的組別
+{
+  await tab('行程').click();
+  await page.getByRole('tab', { name: /Day 1/ }).click();
+  const wx = page.locator('.bubble.weather');
+  await wx.locator('.wx-temp').waitFor({ timeout: 8000 });
+  const t1 = await wx.innerText();
+  check(t1.includes('9°') && t1.includes('16°') && t1.includes('60%') && t1.includes('🌧️'), `Day 1 天氣：${t1.replace(/\n/g, ' ')}`);
+  check(!(await page.locator('.day-bar').innerText()).includes('個行程'), '不再顯示「共幾個行程」');
+  await page.getByRole('tab', { name: /Day 5/ }).click();
+  await page.getByRole('radio', { name: '迪士尼組' }).click();
+  await page.waitForTimeout(300);
+  const a = await wx.innerText();
+  await page.getByRole('radio', { name: '河口湖組' }).click();
+  await page.locator('.bubble.weather', { hasText: '2°' }).waitFor({ timeout: 8000 });
+  const b = await wx.innerText();
+  check(a.includes('9°') && b.includes('2°') && b.includes('12°') && b.includes('10%'), `分組看各自的天氣（迪士尼 ${a.replace(/\n/g, ' ')}／河口湖 ${b.replace(/\n/g, ' ')}）`);
+  await shot('天氣-河口湖組');
+  await page.getByRole('tab', { name: /Day 1/ }).click();
+  await shot('天氣-Day1');
+  // 打開 App：行程頁從第一天（還沒出發）開始，不停在上次看的日期
+  await page.getByRole('tab', { name: /Day 3/ }).click();
+  await page.reload();
+  await page.locator('.day-strip [aria-selected="true"]').waitFor();
+  const sel = await page.locator('.day-strip [aria-selected="true"]').innerText();
+  check(sel.includes('Day 1') && !page.url().includes('/plan/2026'), `重新打開從第一天開始（${sel.split('\n')[0]}）`);
 }
 
 // 字體大小：小中大，重新打開還記得
